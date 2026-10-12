@@ -4,7 +4,7 @@
 PlayerSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 28
-  productGUID: f48f106a1321e1541b7ca2dac5057d5d
+  productGUID: a2bea045c7c6c614fb92eeccd51835c6
   AndroidProfiler: 0
   AndroidFilterTouchesWhenObscured: 0
   AndroidEnableSustainedPerformanceMode: 0
@@ -13,7 +13,7 @@ PlayerSettings:
   useOnDemandResources: 0
   accelerometerFrequency: 60
   companyName: DefaultCompany
-  productName: NSAC26 RoverBuilder
+  productName: My project
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -843,14 +843,14 @@ PlayerSettings:
   editorAssembliesCompatibilityLevel: 1
   m_RenderingPath: 1
   m_MobileRenderingPath: 1
-  metroPackageName: NSAC26 RoverBuilder
+  metroPackageName: My project
   metroPackageVersion: 
   metroCertificatePath: 
   metroCertificatePassword: 
   metroCertificateSubject: 
   metroCertificateIssuer: 
   metroCertificateNotAfter: 0000000000000000
-  metroApplicationDescription: NSAC26 RoverBuilder
+  metroApplicationDescription: My project
   wsaImages: {}
   metroTileShortName: 
   metroTileShowName: 0
@@ -921,10 +921,10 @@ PlayerSettings:
   captureStartupLogs: {}
   activeInputHandler: 1
   windowsGamepadBackendHint: 0
-  cloudProjectId: c58ce2bc-5b3e-42e9-ba3a-e472422f427d
+  cloudProjectId: 86d435f1-6475-4e96-ad35-239bda545f70
   framebufferDepthMemorylessMode: 0
   qualitySettingsNames: []
-  projectName: NSAC26 RoverBuilder
+  projectName: My project 2026-10-11_22-36-18
   organizationId: imtiaz-ahmed-dipto-as-publisher
   cloudEnabled: 0
   legacyClampBlendShapeWeights: 0

@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 6e9f122d06bc17e439f14822d25d9e62
+guid: 61aae8d04006c41468081c1a325e5f9b
 TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
@@ -9,7 +9,7 @@ TrueTypeFontImporter:
   characterPadding: 1
   includeFontData: 1
   fontNames:
-  - Mochiy Pop One
+  - Fredoka One
   fallbackFontReferences: []
   customCharacters: 
   fontRenderingMode: 0
