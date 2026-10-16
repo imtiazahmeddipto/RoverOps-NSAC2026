@@ -614,11 +614,38 @@ public class Rover : MonoBehaviour
     }
 
     // ---------------- UI ----------------
-    void Highlight(CodeBlock block)          // the running block grows a little
+    void Highlight(CodeBlock block)          // the running block gets a white outline and is drawn on top
     {
-        if (highlighted) highlighted.body.localScale = Vector3.one;
+        if (highlighted) { SetOutline(highlighted, false); SetOnTop(highlighted, false); }
         highlighted = block;
-        if (block) block.body.localScale = Vector3.one * 1.08f;
+        if (block) { SetOutline(block, true); SetOnTop(block, true); }
+    }
+
+    static void SetOutline(CodeBlock block, bool on)
+    {
+        Graphic g = block.body.GetComponent<Graphic>();
+        if (g == null) return;
+        Outline o = g.GetComponent<Outline>();
+        if (on)
+        {
+            if (o == null) o = g.gameObject.AddComponent<Outline>();
+            o.effectColor = Color.black;
+            o.effectDistance = new Vector2(4f, -4f);   // outline thickness in pixels
+            o.enabled = true;
+        }
+        else if (o != null) o.enabled = false;
+    }
+
+    static void SetOnTop(CodeBlock block, bool on)   // draws this block above all the others
+    {
+        Canvas top = block.GetComponent<Canvas>();
+        if (on)
+        {
+            if (top == null) top = block.gameObject.AddComponent<Canvas>();
+            top.overrideSorting = true;
+            top.sortingOrder = 10;
+        }
+        else if (top != null) Destroy(top);
     }
 
     void SetRunLabel()

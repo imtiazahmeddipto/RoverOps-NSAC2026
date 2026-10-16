@@ -30,7 +30,7 @@ public class RoverCamera : MonoBehaviour
     public float SampleDistance { get; private set; } = Mathf.Infinity;
     public float SampleAngle { get; private set; }
 
-    static readonly Color RockColor = new Color(1f, 0.8f, 0.25f), NearestColor = new Color(1f, 0.35f, 0.4f), SampleColor = new Color(0.3f, 1f, 0.9f);
+    static readonly Color RockColor = Color.white, NearestColor = Color.red, SampleColor = new Color(0.2f, 1f, 0.3f);
 
     readonly List<Collider> seen = new List<Collider>();
     readonly List<float> seenDistance = new List<float>();
@@ -160,7 +160,8 @@ public class RoverCamera : MonoBehaviour
 
             bool sample = IsSample(seen[i]);
             Color color = sample ? SampleColor : seenDistance[i] <= RockDistance ? NearestColor : RockColor;
-            box.GetComponent<Image>().color = color;
+            for (int c = 0; c < box.childCount; c++)
+                if (box.GetChild(c).TryGetComponent(out Image corner)) corner.color = color;
             TMP_Text label = box.GetComponentInChildren<TMP_Text>();
             label.text = (sample ? "SAMPLE  " : "ROCK  ") + seenDistance[i].ToString("0.0") + " m";
             label.color = color;
