@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 673b78688168ef94094d6c0ba086d0ab, type: 3}
+  m_Name: Mission Database
+  m_EditorClassIdentifier: 
+  sectors:
+  - name: Sector 1
+    label: Tutorial
+    missions:
+    - scene: Mission 1
+      title: Reach the Target
+      description: Drive the rover to the marked location
+      image: {fileID: 21300000, guid: b7b5bfa166756f145b5179474020bb4f, type: 3}
+      starGoals:
+      - text: Reach the goal
+      - text: Collect Rock
+    - scene: Mission 2
+      title: Turn left
+      description: Turn left Drive the rover to the marked location
+      image: {fileID: 21300000, guid: b7b5bfa166756f145b5179474020bb4f, type: 3}
+      starGoals:
+      - text: Reach the goal
+      - text: Turn Left
+      - text: Collect Rock
+    - scene: Mission 3
+      title: Turn Right
+      description: Turn Right Drive the rover to the marked location
+      image: {fileID: 21300000, guid: b7b5bfa166756f145b5179474020bb4f, type: 3}
+      starGoals:
+      - text: Reach the goal
+      - text: Turn Right
+      - text: Collect Rock

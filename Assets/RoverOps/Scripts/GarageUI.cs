@@ -16,7 +16,7 @@ public class GarageUI : MonoBehaviour
     public PartDatabase database;
     public RoverLoadout garageRover;                    // the display rover in this scene
     public Camera viewCamera;                           // optional: a camera that films the rover only while the garage is open
-    public string missionScene = "RoverOps Demo";       // PLAY loads this scene (it must be in File > Build Settings)
+    public string missionScene = "";       // PLAY loads this scene (it must be in File > Build Settings)
     public float turntableSpeed = 12f;                  // the display rover slowly turns (degrees per second, 0 = off)
     public Color equippedCardColor = new Color(1f, 0.87f, 0.55f);
     public Color selectedTabColor = new Color(1f, 0.62f, 0.3f);
@@ -52,9 +52,11 @@ public class GarageUI : MonoBehaviour
         Show(PartType.Wheels);
     }
 
-    // PLAY button: drive the rover you just built (the mission rover reads the same saved parts)
-    public void Play() => SceneManager.LoadScene(missionScene);
-
+    public void Play()
+    {
+        string scene = MissionDatabase.SelectedScene;
+        SceneManager.LoadScene(string.IsNullOrEmpty(scene) ? missionScene : scene);
+    }
     void Update()
     {
         if (garageRover != null && turntableSpeed != 0f) garageRover.transform.Rotate(0f, turntableSpeed * Time.deltaTime, 0f);
