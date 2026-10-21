@@ -57,6 +57,7 @@ public class Rover : MonoBehaviour
     public TMP_Text statusText;
     public TMP_Text runButtonLabel;
     public string garageScene = "RoverOps Garage";     // the GARAGE button loads this scene
+    public Transition transition;                       // optional: plays the transition before loading the garage
 
     public static bool IsRunning { get; private set; }
 
@@ -71,6 +72,8 @@ public class Rover : MonoBehaviour
     string message = "";
     bool crashed, failed;
     int samples;
+    float runStart, runTime;
+    public float RunTime => runTime;
     readonly List<GameObject> collected = new List<GameObject>();
 
     // motion order (FixedUpdate carries it out)
@@ -138,20 +141,14 @@ public class Rover : MonoBehaviour
         SpinWheels(step * moveDir, 0f);
         odometer += step;
         UseEnergy(step * energyPerMeter);
-        if (Touching(out string what)) Crash("The rover crashed into a " + what + "!");
+        if (Touching()) Crash("The rover crashed!");
     }
 
-    // Is the rover's body touching anything (except the ground)?
-    bool Touching(out string what)
+    bool Touching()
     {
-        what = "";
         Vector3 center = rb.position + rb.rotation * body.center;
         foreach (Collider c in Physics.OverlapBox(center, body.size * 0.49f, rb.rotation))
-        {
-            if (c.transform.IsChildOf(transform) || c.name == "Ground") continue;
-            what = RoverCamera.IsSample(c) ? "sample" : "rock";
-            return true;
-        }
+            if (!c.transform.IsChildOf(transform) && c.name != "Ground") return true;
         return false;
     }
 
@@ -185,7 +182,6 @@ public class Rover : MonoBehaviour
     public void Run()                   // RUN button (shows STOP while a program runs)
     {
         if (IsRunning) { StopProgram("Program stopped"); return; }
-        if (crashed) { Say("<color=#FF6B6B>The rover crashed. Press RESTART first.</color>"); return; }
         var all = new List<CodeBlock>(programArea.GetComponentsInChildren<CodeBlock>());
         int start = all.FindIndex(b => b.type == Block.Start);
         if (start < 0) { Say("Add a 'When mission starts' block first"); return; }
@@ -200,6 +196,9 @@ public class Rover : MonoBehaviour
             return;
         }
 
+        Restart();                                  // every run starts fresh: back at the start, full battery, samples back
+        runStart = Time.time;
+        runTime = 0f;
         failed = false;
         IsRunning = true;
         SetRunLabel();
@@ -224,7 +223,8 @@ public class Rover : MonoBehaviour
     public void OpenGarage()
     {
         if (IsRunning) { Say("Stop the program before going to the garage"); return; }
-        SceneManager.LoadScene(garageScene);
+        if (transition) transition.LoadScene(garageScene);
+        else SceneManager.LoadScene(garageScene);
     }
 
     public void Clear()
@@ -492,7 +492,7 @@ public class Rover : MonoBehaviour
         if (text == "") return defaultValue;
         if (float.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float v)) return v;
         if (Read(text, out v)) return v;
-        Fail("ERROR: '" + text + "' is not a number or a reading. Use a number, rock dist, sample dist, sample angle, samples or battery.\");");
+        Fail("ERROR: '" + text + "' is not a number or a reading. Use a number, rock dist, sample dist, sample angle, samples or battery.");
         return defaultValue;
     }
 
@@ -543,7 +543,7 @@ public class Rover : MonoBehaviour
             SpinWheels(0f, step * direction);
             turned += step;
             yield return new WaitForFixedUpdate();
-            if (Touching(out string what)) { Crash("The rover hit a " + what + " while turning!"); yield break; }
+            if (Touching()) { Crash("The rover crashed while turning!"); yield break; }
         }
     }
 
@@ -664,8 +664,10 @@ public class Rover : MonoBehaviour
         if (statusText == null) return;
         string readings = "rock dist " + Show("rock dist", cam.RockDistance) + "   sample dist " + Show("sample dist", cam.SampleDistance)
               + "   sample angle " + Show("sample angle", cam.SampleAngle);
-        string text = message + "\n\n" + readings + "\nsamples " + samples
-                    + "\nspeed " + speed.ToString("0.0") + " m/s   odometer " + odometer.ToString("0.0") + " m   battery " + Show("battery", BatteryPercent)
+        if (IsRunning) runTime = Time.time - runStart;
+        string time = IsRunning ? "Running for " + runTime.ToString("0") + "s" : runTime > 0f ? "Last run " + runTime.ToString("0.0") + "s" : "";
+        string text = message + "\n" + time + "\n\n" + readings + "\nsamples " + samples
+                            + "\nspeed " + speed.ToString("0.0") + " m/s   odometer " + odometer.ToString("0.0") + " m   battery " + Show("battery", BatteryPercent)
                     + (recharging ? " <color=#FFC63A>(recharging)</color>" : "");
         statusText.text = text;
     }

@@ -20,6 +20,7 @@ public class GarageUI : MonoBehaviour
     public float turntableSpeed = 12f;                  // the display rover slowly turns (degrees per second, 0 = off)
     public Color equippedCardColor = new Color(1f, 0.87f, 0.55f);
     public Color selectedTabColor = new Color(1f, 0.62f, 0.3f);
+    public Transition transition;                       // optional: plays the transition before PLAY loads the mission
 
     Transform tabs;
     GameObject cardTemplate;
@@ -55,7 +56,11 @@ public class GarageUI : MonoBehaviour
     public void Play()
     {
         string scene = MissionDatabase.SelectedScene;
-        SceneManager.LoadScene(string.IsNullOrEmpty(scene) ? missionScene : scene);
+        if (string.IsNullOrEmpty(scene)) scene = missionScene;
+        if (string.IsNullOrEmpty(scene)) { Debug.LogWarning("[Garage] No mission picked."); return; }
+
+        if (transition) transition.LoadScene(scene);
+        else SceneManager.LoadScene(scene);
     }
     void Update()
     {
