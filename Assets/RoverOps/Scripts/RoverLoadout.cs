@@ -11,6 +11,7 @@ public class RoverLoadout : MonoBehaviour
 {
     public PartDatabase database;
     public Transform model;             // holds the Body model; the parts go here too
+    public Transform drillMount;        // optional: Science (drill) parts are placed under this (Drill 2), so they move with the arm
     public Rover rover;                 // optional: the playable rover gets the part stats
 
     readonly Dictionary<PartType, GameObject> mounted = new Dictionary<PartType, GameObject>();
@@ -47,6 +48,7 @@ public class RoverLoadout : MonoBehaviour
         GameObject go = Instantiate(part.prefab, model, false);
         go.name = part.type + ": " + part.name;
         SetLayer(go.transform, model.gameObject.layer);
+        if (part.type == PartType.Science && drillMount != null) go.transform.SetParent(drillMount, true);   // keeps its place, then follows the arm
         mounted[part.type] = go;
     }
 
@@ -120,12 +122,12 @@ public class RoverLoadout : MonoBehaviour
         }
         if (min.x > max.x) return;                         // no models
 
-        BoxCollider box = rover.GetComponent<BoxCollider>();
-        if (box != null)
-        {
-            box.center = (min + max) / 2f + Vector3.up * 0.05f;   // a little above the ground
-            box.size = max - min - Vector3.up * 0.1f;
-        }
+        //BoxCollider box = rover.GetComponent<BoxCollider>();
+        //if (box != null)
+        //{
+            //box.center = (min + max) / 2f + Vector3.up * 0.05f;   // a little above the ground
+            //box.size = max - min - Vector3.up * 0.1f;
+        //}
         if (rover.nose != null) rover.nose.localPosition = new Vector3(0f, 0.5f, max.z);
     }
 

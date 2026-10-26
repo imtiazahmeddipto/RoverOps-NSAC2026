@@ -67,6 +67,11 @@ public class Rover : MonoBehaviour
     BoxCollider body;
     Vector3 startPosition;
     Quaternion startRotation;
+    RoverSuspension suspension;         // optional: raycast suspension on the same object
+    RoverDrill drillArm;                // optional: drill arm animation on the same object
+    Vector3 flatPos;                    // where the rover is on the map (x, z); height and tilt come from the suspension
+    float heading;                      // which way the rover faces (degrees)
+    Quaternion Facing => Quaternion.Euler(0f, heading, 0f);
     Coroutine program;
     CodeBlock highlighted, errorBlock;
     string message = "";
@@ -74,6 +79,10 @@ public class Rover : MonoBehaviour
     int samples;
     float runStart, runTime;
     public float RunTime => runTime;
+    int blockCount;
+    public int BlockCount => blockCount;        // blocks in the last program (not counting "When mission starts")
+    public int Samples => samples;
+    public void EndMission(string text) => StopProgram(text);   // the MissionHandler stops the run at the finish line
     readonly List<GameObject> collected = new List<GameObject>();
 
     // motion order (FixedUpdate carries it out)
@@ -96,6 +105,10 @@ public class Rover : MonoBehaviour
         energy = batteryCapacity;
         startPosition = transform.position;
         startRotation = transform.rotation;
+        suspension = GetComponent<RoverSuspension>();
+        drillArm = GetComponent<RoverDrill>();
+        flatPos = startPosition;
+        heading = startRotation.eulerAngles.y;
         IsRunning = false;
         SetRunLabel();
         Say("Drag blocks under 'When mission starts', then press RUN");
@@ -105,6 +118,25 @@ public class Rover : MonoBehaviour
 
     // ---------------- WHEELS (every physics step) ----------------
     void FixedUpdate()
+    {
+        Drive();
+        Place();
+    }
+
+    // Puts the rover where Drive and Turn moved it (the suspension adds height and tilt). now = jump there at once
+    void Place(bool now = false)
+    {
+        if (suspension != null)
+        {
+            if (now) suspension.Snap(flatPos, heading);
+            else suspension.Place(flatPos, heading);
+            return;
+        }
+        if (now) { rb.position = flatPos; rb.rotation = Facing; transform.SetPositionAndRotation(flatPos, Facing); }
+        else { rb.MovePosition(flatPos); rb.MoveRotation(Facing); }
+    }
+
+    void Drive()
     {
         if (crashed) return;
         float dt = Time.fixedDeltaTime;
@@ -134,10 +166,10 @@ public class Rover : MonoBehaviour
 
         float step = speed * dt;
         if (Moving) step = Mathf.Min(step, stopAt - odometer);
-        Vector3 next = rb.position + rb.rotation * Vector3.forward * (step * moveDir);
+        Vector3 next = flatPos + Facing * Vector3.forward * (step * moveDir);
         if (Mathf.Abs(next.x) > areaSize / 2f || Mathf.Abs(next.z) > areaSize / 2f) { Crash("The rover drove out of the test area!"); return; }
 
-        rb.MovePosition(next);
+        flatPos = next;
         SpinWheels(step * moveDir, 0f);
         odometer += step;
         UseEnergy(step * energyPerMeter);
@@ -197,6 +229,7 @@ public class Rover : MonoBehaviour
         }
 
         Restart();                                  // every run starts fresh: back at the start, full battery, samples back
+        blockCount = script.Count;
         runStart = Time.time;
         runTime = 0f;
         failed = false;
@@ -210,13 +243,14 @@ public class Rover : MonoBehaviour
         StopProgram("Rover is back at the start");
         crashed = false;
         speed = odometer = 0f;
-        rb.position = startPosition;
-        rb.rotation = startRotation;
-        transform.SetPositionAndRotation(startPosition, startRotation);
+        flatPos = startPosition;
+        heading = startRotation.eulerAngles.y;
+        Place(true);
         foreach (GameObject sample in collected) sample.SetActive(true);
         collected.Clear();
         samples = 0;
         Refill();
+        if (drillArm) drillArm.ResetPose();
     }
 
     // GARAGE button: back to the garage to change parts
@@ -244,6 +278,7 @@ public class Rover : MonoBehaviour
 
     void EndProgram(string text)
     {
+        if (IsRunning) runTime = Time.time - runStart;   // freeze the exact time the run ended
         stopAt = -1f;                   // the rover brakes to a stop by itself
         IsRunning = false;
         Highlight(null);
@@ -539,7 +574,7 @@ public class Rover : MonoBehaviour
             while (recharging) yield return null;        // empty battery: wait for the sun
             float step = Mathf.Min(turnSpeed * Time.fixedDeltaTime, target - turned);
             UseEnergy(step / 90f * energyPerTurn);
-            rb.MoveRotation(rb.rotation * Quaternion.Euler(0f, step * direction, 0f));
+            heading += step * direction;
             SpinWheels(0f, step * direction);
             turned += step;
             yield return new WaitForFixedUpdate();
@@ -573,16 +608,21 @@ public class Rover : MonoBehaviour
             yield return null;
         }
         UseEnergy(drillEnergy);
+        if (drillArm)
+        {
+            message = "Moving the drill arm...";
+            yield return drillArm.Reach(sample.bounds.center);       // arm out to the sample
+        }
         float time = 3f / drillSpeed;
         for (float t = 0f; t < time; t += Time.deltaTime)
         {
             message = "Drilling... " + Mathf.RoundToInt(t / time * 100f) + "%";
             yield return null;
         }
-        // TODO: drill animation
         sample.gameObject.SetActive(false);
         collected.Add(sample.gameObject);
         samples++;
+        if (drillArm) yield return drillArm.Fold();                  // arm back
         Say("Sample collected! (" + samples + " / " + sampleCapacity + " in the sample box)");
     }
 
@@ -605,6 +645,7 @@ public class Rover : MonoBehaviour
     // ---------------- WHEELS ----------------
     void SpinWheels(float forward, float turnDegrees)
     {
+        if (suspension != null) { suspension.Roll(forward, turnDegrees); return; }     // the suspension turns the wheels
         foreach (Transform wheel in wheels)
         {
             float side = Vector3.Dot(wheel.position - transform.position, transform.right);   // left < 0 < right

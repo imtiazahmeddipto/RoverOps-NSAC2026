@@ -4,10 +4,32 @@ using UnityEngine;
 
 // One star goal of a mission. Only the text for now.
 // TODO: what the goal checks (time, battery, samples...) so the mission scene can award the star.
+public enum GoalType { Finish, MaxBlocks, MaxTime, MinBattery, MinSamples }
+
+// One star goal of a mission: what it checks and the number to beat
 [Serializable]
 public class StarGoal
 {
-    public string text = "Reach the goal";
+    public GoalType type;
+    public float value;
+    [Tooltip("Leave empty to write it from the type and value")]
+    public string text;
+
+    public string Text
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(text)) return text;
+            switch (type)
+            {
+                case GoalType.MaxBlocks: return "Use " + value + " blocks or fewer";
+                case GoalType.MaxTime: return "Finish in " + value + "s or less";
+                case GoalType.MinBattery: return "Finish with " + value + "% battery or more";
+                case GoalType.MinSamples: return "Collect " + value + " samples";
+                default: return "Reach the finish line";
+            }
+        }
+    }
 }
 
 // One mission = one scene
