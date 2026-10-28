@@ -56,8 +56,6 @@ public class Rover : MonoBehaviour
     public Transform programArea;       // the Code Editor's block list
     public TMP_Text statusText;
     public TMP_Text runButtonLabel;
-    public string garageScene = "RoverOps Garage";     // the GARAGE button loads this scene
-    public Transition transition;                       // optional: plays the transition before loading the garage
 
     public static bool IsRunning { get; private set; }
 
@@ -251,14 +249,6 @@ public class Rover : MonoBehaviour
         samples = 0;
         Refill();
         if (drillArm) drillArm.ResetPose();
-    }
-
-    // GARAGE button: back to the garage to change parts
-    public void OpenGarage()
-    {
-        if (IsRunning) { Say("Stop the program before going to the garage"); return; }
-        if (transition) transition.LoadScene(garageScene);
-        else SceneManager.LoadScene(garageScene);
     }
 
     public void Clear()

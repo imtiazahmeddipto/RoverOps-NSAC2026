@@ -270,7 +270,6 @@ MonoBehaviour:
   database: {fileID: 11400000, guid: 0e4d306a5d03c6c4bb8c74504aea2c3d, type: 2}
   garageRover: {fileID: 6258089724776478986}
   viewCamera: {fileID: 0}
-  missionScene: RoverOps Demo
   turntableSpeed: 12
   equippedCardColor: {r: 1, g: 0.8578753, b: 0.504717, a: 1}
   selectedTabColor: {r: 1, g: 0.85882354, b: 0.5058824, a: 1}
@@ -8936,6 +8935,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   database: {fileID: 11400000, guid: 0e4d306a5d03c6c4bb8c74504aea2c3d, type: 2}
   model: {fileID: 8780659825380483570}
+  drillMount: {fileID: 0}
   rover: {fileID: 0}
 --- !u!114 &6343554725342075426
 MonoBehaviour:
