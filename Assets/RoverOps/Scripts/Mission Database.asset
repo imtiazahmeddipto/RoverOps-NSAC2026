@@ -20,6 +20,7 @@ MonoBehaviour:
       title: Reach the Target
       description: Drive the rover to the marked location
       image: {fileID: 21300000, guid: b7b5bfa166756f145b5179474020bb4f, type: 3}
+      maxRoverMass: 100
       starGoals:
       - type: 0
         value: 0
@@ -31,30 +32,17 @@ MonoBehaviour:
         value: 30
         text: Finish Mission under 30s
     - scene: Mission 2
-      title: Turn left
-      description: Turn left Drive the rover to the marked location
+      title: Turn Left
+      description: Drive the rover to the marked location by turning
       image: {fileID: 21300000, guid: b7b5bfa166756f145b5179474020bb4f, type: 3}
+      maxRoverMass: 200
       starGoals:
       - type: 0
         value: 0
         text: Reach the goal
-      - type: 0
-        value: 0
-        text: Turn Left
-      - type: 0
-        value: 0
-        text: Collect Rock
-    - scene: Mission 3
-      title: Turn Right
-      description: Turn Right Drive the rover to the marked location
-      image: {fileID: 21300000, guid: b7b5bfa166756f145b5179474020bb4f, type: 3}
-      starGoals:
-      - type: 0
-        value: 0
-        text: Reach the goal
-      - type: 0
-        value: 0
-        text: Turn Right
-      - type: 0
-        value: 0
-        text: Collect Rock
+      - type: 1
+        value: 3
+        text: Use max 3 code blocks
+      - type: 2
+        value: 30
+        text: Finish Mission under 30s

@@ -112,16 +112,35 @@ public class MissionSelectUI : MonoBehaviour
     }
 
     // Prepare Rover OnClick: remember the mission and open the garage
-    public void PrepareRover()
+public void PrepareRover()
+{
+    if (string.IsNullOrEmpty(selected) || !selectedOpen)
+        return;
+
+    // Save the newly selected mission.
+    MissionDatabase.SelectedScene = selected;
+
+    // Open the garage panel.
+    if (garagePanel != null)
     {
-        if (string.IsNullOrEmpty(selected) || !selectedOpen) return;      // locked
-        MissionDatabase.SelectedScene = selected;
-        if (garagePanel)
+        if (missionsPanel != null)
+            missionsPanel.SetActive(false);
+
+        garagePanel.SetActive(true);
+
+        // Refresh the mass limit for the newly selected mission.
+        GarageUI garageUI = GetComponent<GarageUI>();
+
+        if (garageUI != null)
         {
-            if (missionsPanel) missionsPanel.SetActive(false);
-            garagePanel.SetActive(true);
+            garageUI.RefreshMissionMassLimit();
+        }
+        else
+        {
+            Debug.LogError("[Missions] GarageUI component not found in Garage Panel.");
         }
     }
+}
 
     // ---------------- HELPERS ----------------
     bool IsOpen(int sector, int index) => unlockAll || database.IsUnlocked(sector, index);

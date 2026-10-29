@@ -41,6 +41,11 @@ public class MissionData
     public string title = "New Mission";
     [TextArea(2, 4)] public string description;
     public Sprite image;
+
+    [Min(1f)]
+    [Tooltip("Maximum allowed total rover mass for this mission, in kilograms.")]
+    public float maxRoverMass = 100f;
+
     public StarGoal[] starGoals = { new StarGoal(), new StarGoal(), new StarGoal() };
 }
 

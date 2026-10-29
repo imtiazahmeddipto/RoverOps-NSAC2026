@@ -5,7 +5,7 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Main Menu.unity
     guid: 99c9720ab356a0642a771bea13969a05
   - enabled: 1
@@ -14,7 +14,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/RoverOps/Mission 1.unity
     guid: 3be5aa7fa89b87d4f95a6d102bd322d1
-  - enabled: 1
+  - enabled: 0
     path: Assets/RoverOps/Mission 2.unity
     guid: 4dcb0123f889d0e40bfd86636f960f75
   m_configObjects:
