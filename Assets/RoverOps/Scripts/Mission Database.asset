@@ -20,7 +20,7 @@ MonoBehaviour:
       title: Reach the Target
       description: Drive the rover to the marked location
       image: {fileID: 21300000, guid: b7b5bfa166756f145b5179474020bb4f, type: 3}
-      maxRoverMass: 100
+      maxRoverMass: 175
       starGoals:
       - type: 0
         value: 0

@@ -22,6 +22,7 @@ public class PartData
     [Tooltip("The 3D model. It is placed under the rover's Model and keeps its own position, like the parts exported from the .blend.")]
     public GameObject prefab;
     public float mass = 10f;                                // kg
+    [Min(0)] public int spacePointCost = 0;                  // 0 = unlocked for free
     public PartStat[] stats = new PartStat[0];
 
     public float Stat(int index) => index < stats.Length ? stats[index].value : 0f;
@@ -34,7 +35,51 @@ public class PartData
 public class PartDatabase : ScriptableObject
 {
     public float bodyMass = 120f;                           // kg, the rover without parts
+    [Min(0)] public int startingSpacePoints = 1000;
     public List<PartData> parts = new List<PartData>();
+
+    const string SpacePointsKey = "RoverOps.SpacePoints";
+    static string OwnedKey(PartData part) => "RoverOps.PartOwned." + part.type + "." + part.name;
+
+    public int SpacePoints
+    {
+        get
+        {
+            InitializeSpacePoints();
+            return PlayerPrefs.GetInt(SpacePointsKey, 0);
+        }
+    }
+
+    public void InitializeSpacePoints()
+    {
+        if (!PlayerPrefs.HasKey(SpacePointsKey))
+        {
+            PlayerPrefs.SetInt(SpacePointsKey, Mathf.Max(0, startingSpacePoints));
+            PlayerPrefs.Save();
+        }
+    }
+
+    public bool IsUnlocked(PartData part)
+    {
+        if (part == null) return false;
+        if (part.spacePointCost <= 0) return true;
+        return PlayerPrefs.GetInt(OwnedKey(part), 0) == 1;
+    }
+
+    public bool TryBuy(PartData part)
+    {
+        if (part == null) return false;
+        if (IsUnlocked(part)) return true;
+
+        InitializeSpacePoints();
+        int balance = PlayerPrefs.GetInt(SpacePointsKey, 0);
+        if (balance < part.spacePointCost) return false;
+
+        PlayerPrefs.SetInt(SpacePointsKey, balance - part.spacePointCost);
+        PlayerPrefs.SetInt(OwnedKey(part), 1);
+        PlayerPrefs.Save();
+        return true;
+    }
 
     // The stats each type has (the order matters: RoverLoadout reads them by number)
     public static string[] StatNames(PartType type)
@@ -70,13 +115,23 @@ public class PartDatabase : ScriptableObject
     public PartData Equipped(PartType type)
     {
         string saved = PlayerPrefs.GetString(Key(type), "");
-        return parts.Find(p => p.type == type && p.name == saved) ?? parts.Find(p => p.type == type);
+        PartData selected = parts.Find(p => p.type == type && p.name == saved && IsUnlocked(p));
+        if (selected != null) return selected;
+
+        // Never equip a locked part as the fallback.
+        return parts.Find(p => p.type == type && IsUnlocked(p));
     }
 
     public bool IsEquipped(PartData part) => Equipped(part.type) == part;
 
     public void Equip(PartData part)
     {
+        if (part == null || !IsUnlocked(part))
+        {
+            Debug.LogWarning("[PartDatabase] Cannot equip a locked part.");
+            return;
+        }
+
         PlayerPrefs.SetString(Key(part.type), part.name);
         PlayerPrefs.Save();
     }

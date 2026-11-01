@@ -21,6 +21,13 @@ public class GarageUI : MonoBehaviour
     public TMP_Text massStatusText;
     public Button playButton;
 
+    [Header("Space Points UI")]
+    [Tooltip("Optional. If empty, GarageUI searches for a TMP object named SpacePointsTXT.")]
+    public TMP_Text spacePointsText;
+    [Tooltip("Optional. If empty, GarageUI searches for ErrorTXT or ErrorText.")]
+    public TMP_Text purchaseErrorText;
+    public float errorMessageSeconds = 2.5f;
+
     [Header("Rover Display")]
     public float turntableSpeed = 12f;
 
@@ -39,6 +46,7 @@ public class GarageUI : MonoBehaviour
     private Image massFill;
     private float missionMassLimit;
     private bool hasValidMission;
+    private Coroutine errorRoutine;
 
     private readonly List<GameObject> cards = new List<GameObject>();
     private readonly Dictionary<PartType, Color> originalTabColors =
@@ -78,6 +86,22 @@ public class GarageUI : MonoBehaviour
 
         cardColor = cardTemplate.GetComponent<Image>().color;
         cardTemplate.SetActive(false);
+
+        if (spacePointsText == null)
+            spacePointsText = FindOptional(transform, "SpacePointsTXT")?.GetComponent<TMP_Text>();
+
+        if (purchaseErrorText == null)
+        {
+            Transform error = FindOptional(transform, "ErrorTXT");
+            if (error == null) error = FindOptional(transform, "ErrorText");
+            if (error != null) purchaseErrorText = error.GetComponent<TMP_Text>();
+        }
+
+        if (purchaseErrorText != null)
+            purchaseErrorText.gameObject.SetActive(false);
+
+        if (database != null)
+            database.InitializeSpacePoints();
 
         // Save the original color of each tab.
         foreach (PartType type in Enum.GetValues(typeof(PartType)))
@@ -215,6 +239,9 @@ public class GarageUI : MonoBehaviour
 
     private void Equip(PartData part)
     {
+        if (part == null || database == null || !database.IsUnlocked(part))
+            return;
+
         if (Rover.IsRunning)
         {
             Debug.LogWarning(
@@ -279,7 +306,8 @@ public class GarageUI : MonoBehaviour
             cards.Add(MakeCard(part));
         }
 
-        // Update mass information and PLAY button.
+        // Update currency and mass information.
+        UpdateSpacePointsUI();
         UpdateMassUI();
     }
 
@@ -356,10 +384,59 @@ public class GarageUI : MonoBehaviour
                 : cardColor;
         }
 
-        Button cardButton = card.GetComponent<Button>();
+        bool unlocked = database.IsUnlocked(part);
 
+        Button cardButton = card.GetComponent<Button>();
         if (cardButton != null)
-            cardButton.onClick.AddListener(() => Equip(part));
+        {
+            cardButton.interactable = unlocked;
+            if (unlocked)
+                cardButton.onClick.AddListener(() => Equip(part));
+        }
+
+        // Lock overlay is a child of PartsListItem. Locked parts cannot be equipped.
+        Transform lockPanel = FindOptional(card.transform, "Lock");
+        if (lockPanel != null)
+        {
+            lockPanel.gameObject.SetActive(!unlocked);
+
+            if (!unlocked)
+            {
+                Transform costTransform = FindOptional(lockPanel, "CostTXT");
+                if (costTransform != null)
+                {
+                    TMP_Text costText = costTransform.GetComponent<TMP_Text>();
+                    if (costText != null)
+                        costText.text = part.spacePointCost.ToString("N0");
+                }
+
+                Transform buyTransform = FindOptional(lockPanel, "Buy Button");
+                if (buyTransform == null) buyTransform = FindOptional(lockPanel, "BuyButton");
+
+                if (buyTransform != null)
+                {
+                    Button buyButton = buyTransform.GetComponent<Button>();
+                    if (buyButton != null)
+                    {
+                        buyButton.interactable = true;
+                        buyButton.onClick.RemoveAllListeners();
+                        buyButton.onClick.AddListener(() => BuyPart(part));
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[Garage] Buy button object has no Button component.", buyTransform);
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("[Garage] Could not find 'Buy Button' under Lock.", lockPanel);
+                }
+            }
+        }
+        else if (!unlocked)
+        {
+            Debug.LogWarning("[Garage] Locked part '" + part.name + "' has no Lock panel in PartsListItem.");
+        }
 
         Find(card.transform, "Parts Name")
             .GetComponent<TMP_Text>().text = part.name;
@@ -414,11 +491,88 @@ public class GarageUI : MonoBehaviour
         // Prevent child graphics from blocking clicks on the card.
         foreach (Graphic graphic in card.GetComponentsInChildren<Graphic>(true))
         {
-            if (graphic.gameObject != card)
+            // Keep graphics inside Lock raycastable so the Buy Button can receive clicks.
+            Transform lockRoot = FindOptional(card.transform, "Lock");
+            bool insideLock = lockRoot != null &&
+                              (graphic.transform == lockRoot || graphic.transform.IsChildOf(lockRoot));
+
+            if (graphic.gameObject != card && !insideLock)
                 graphic.raycastTarget = false;
         }
 
         return card;
+    }
+
+    private void BuyPart(PartData part)
+    {
+        if (database == null || part == null)
+            return;
+
+        if (database.IsUnlocked(part))
+        {
+            Refresh();
+            return;
+        }
+
+        if (database.SpacePoints < part.spacePointCost)
+        {
+            ShowPurchaseError("Not enough Space Points!");
+            return;
+        }
+
+        if (!database.TryBuy(part))
+        {
+            ShowPurchaseError("Could not buy this part.");
+            return;
+        }
+
+        ClearPurchaseError();
+        UpdateSpacePointsUI();
+        Refresh();
+    }
+
+    private void UpdateSpacePointsUI()
+    {
+        if (spacePointsText != null && database != null)
+            spacePointsText.text = database.SpacePoints.ToString("N0");
+    }
+
+    private void ShowPurchaseError(string message)
+    {
+        if (purchaseErrorText == null)
+        {
+            Debug.LogWarning("[Garage] " + message);
+            return;
+        }
+
+        if (errorRoutine != null)
+            StopCoroutine(errorRoutine);
+
+        purchaseErrorText.text = message;
+        purchaseErrorText.gameObject.SetActive(true);
+        errorRoutine = StartCoroutine(HidePurchaseError());
+    }
+
+    private System.Collections.IEnumerator HidePurchaseError()
+    {
+        yield return new WaitForSeconds(Mathf.Max(0.1f, errorMessageSeconds));
+
+        if (purchaseErrorText != null)
+            purchaseErrorText.gameObject.SetActive(false);
+
+        errorRoutine = null;
+    }
+
+    private void ClearPurchaseError()
+    {
+        if (errorRoutine != null)
+        {
+            StopCoroutine(errorRoutine);
+            errorRoutine = null;
+        }
+
+        if (purchaseErrorText != null)
+            purchaseErrorText.gameObject.SetActive(false);
     }
 
     private static void ReadOnly(Slider bar)
@@ -446,6 +600,19 @@ public class GarageUI : MonoBehaviour
     {
         LoadSelectedMission();
         UpdateMassUI();
+    }
+
+    private static Transform FindOptional(Transform root, string objectName)
+    {
+        if (root == null) return null;
+
+        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+        {
+            if (child.name == objectName)
+                return child;
+        }
+
+        return null;
     }
 
     private static Transform Find(Transform root, string objectName)
