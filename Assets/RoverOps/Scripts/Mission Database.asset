@@ -18,31 +18,153 @@ MonoBehaviour:
     missions:
     - scene: Mission 1
       title: Reach the Target
-      description: Drive the rover to the marked location
-      image: {fileID: 21300000, guid: b7b5bfa166756f145b5179474020bb4f, type: 3}
-      maxRoverMass: 175
+      description: Drive the rover to the marked location.
+      video: {fileID: 32900000, guid: 14ed641432c4b7e4a846a782ff508a68, type: 3}
+      maxRoverMass: 500
       starGoals:
       - type: 0
         value: 0
         text: Reach the goal
       - type: 1
         value: 3
-        text: Use max 3 code blocks
+        text: Use maximum 3 code blocks
       - type: 2
-        value: 30
-        text: Finish Mission under 30s
+        value: 15
+        text: Finish under 15 seconds
     - scene: Mission 2
-      title: Turn Left
-      description: Drive the rover to the marked location by turning
-      image: {fileID: 21300000, guid: b7b5bfa166756f145b5179474020bb4f, type: 3}
-      maxRoverMass: 200
+      title: Turn and Move
+      description: Turn towards the flag and reach it.
+      video: {fileID: 0}
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        text: Reach the goal.
+      - type: 1
+        value: 3
+        text: Use maximum 3 code blocks
+      - type: 2
+        value: 30
+        text: Finish under 30 seconds
+    - scene: Mission 3
+      title: Collect the Rock
+      description: Use camera readings to find and collect the rock.
+      video: {fileID: 0}
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        text: Collect the rock
+      - type: 1
+        value: 4
+        text: Use maximum 4 code blocks
+      - type: 2
+        value: 40
+        text: Finish under 40 seconds
+    - scene: Mission 4
+      title: Small or Large?
+      description: Equip the HD Camera, identify the correct rock by size and collect
+        it.
+      video: {fileID: 0}
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        text: Collect the correct rock.
+      - type: 1
+        value: 5
+        text: Use maximum 5 code blocks
+      - type: 2
+        value: 45
+        text: Finish under 45 seconds
+    - scene: Mission 5
+      title: First Discovery
+      description: Analyse the rock and transmit the scientific data.
+      video: {fileID: 0}
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        text: Transmit the scientific data
+      - type: 1
+        value: 5
+        text: Use maximum 5 code blocks
+      - type: 2
+        value: 45
+        text: Finish under 45 seconds
+    - scene: Mission 6
+      title: Capture the Moment
+      description: Photograph the rock, return to the lander and send the data.
+      video: {fileID: 0}
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        text: Send the correct photograph.
+      - type: 1
+        value: 5
+        text: Use maximum 5 code blocks
+      - type: 2
+        value: 60
+        text: Finish under 60 seconds
+    - scene: Mission 7
+      title: Running Out of Power
+      description: Equip a suitable solar panel and recharge the rover before continuing.
+      video: {fileID: 0}
+      maxRoverMass: 500
       starGoals:
       - type: 0
         value: 0
         text: Reach the goal
       - type: 1
-        value: 3
-        text: Use max 3 code blocks
+        value: 5
+        text: Use maximum 5 code blocks
+      - type: 3
+        value: 50
+        text: Reach with minimum 50% battery
+    - scene: Mission 8
+      title: Wheel Test
+      description: Choose suitable rover wheels and complete the track.
+      video: {fileID: 0}
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        text: Reach the goal
       - type: 2
         value: 30
-        text: Finish Mission under 30s
+        text: Finish under 30 seconds
+      - type: 3
+        value: 40
+        text: Reach with minimum 40% battery
+    - scene: Mission 9
+      title: Sample Collector
+      description: Choose a suitable drill, collect three samples and store them.
+      video: {fileID: 0}
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        text: Reach the goal
+      - type: 4
+        value: 3
+        text: Collect three samples
+      - type: 1
+        value: 8
+        text: Use maximum 8 code blocks
+    - scene: Mission 10
+      title: Dangerous Ground
+      description: Use the HD Camera to detect dangerous terrain and navigate safely
+        around it.
+      video: {fileID: 0}
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        text: Reach the goal
+      - type: 1
+        value: 8
+        text: Use maximum 8 code blocks
+      - type: 3
+        value: 40
+        text: Reach with minimum 40% battery

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Video;
 
 // One star goal of a mission. Only the text for now.
 // TODO: what the goal checks (time, battery, samples...) so the mission scene can award the star.
@@ -40,7 +41,7 @@ public class MissionData
     public string scene;
     public string title = "New Mission";
     [TextArea(2, 4)] public string description;
-    public Sprite image;
+    public VideoClip video;
 
     [Min(1f)]
     [Tooltip("Maximum allowed total rover mass for this mission, in kilograms.")]
