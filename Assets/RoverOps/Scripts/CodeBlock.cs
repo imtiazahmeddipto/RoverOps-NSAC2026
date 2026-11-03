@@ -13,7 +13,13 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
     public Block type;
     public RectTransform body;          // the visible block (moves right inside If / Else / Repeat)
     public TMP_Text selector;           // optional reading / variable chip
-    public string[] options;            // what the selector chip cycles through
+    [System.Serializable]
+    public class OptionSetting
+    {
+        public string name;
+        public bool hasComparison;
+    }
+    public OptionSetting[] options;
     public TMP_Text compare;            // optional "<" / ">" / "=" chip
     public TMP_InputField valueInput;   // optional number slot
     public RectTransform programArea;   // the Code Editor's block list (zooms and moves)
@@ -21,6 +27,8 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
     static readonly string[] Signs = { "<", ">", "=" };
     RectTransform dragged;
+    int optionIndex = -1;               // the option the selector shows, by POSITION (duplicate names can't trap the cycle)
+    static readonly System.Collections.Generic.HashSet<string> warned = new System.Collections.Generic.HashSet<string>();
 
     public string Selected => selector != null ? selector.text : "";
     public string Sign => compare != null ? compare.text : "<";
@@ -28,8 +36,87 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
     void Start()
     {
-        if (selector != null) selector.GetComponentInParent<Button>().onClick.AddListener(() => Cycle(selector, options));
-        if (compare != null) compare.GetComponentInParent<Button>().onClick.AddListener(() => Cycle(compare, Signs));
+        if (selector != null)
+        {
+            Button selectorButton = selector.GetComponentInParent<Button>();
+
+            if (selectorButton != null)
+                selectorButton.onClick.AddListener(CycleOption);
+
+            optionIndex = FindOption(selector.text);
+            CheckOptions();
+            UpdateOptionControls();
+        }
+
+        if (compare != null)
+        {
+            Button compareButton = compare.GetComponentInParent<Button>();
+
+            if (compareButton != null)
+                compareButton.onClick.AddListener(() => Cycle(compare, Signs));
+        }
+    }
+    void CycleOption()
+    {
+        if (Rover.IsRunning || options == null || options.Length == 0)
+            return;
+
+        int index = optionIndex;
+        for (int tries = 0; tries < options.Length; tries++)            // the next option this rover can use
+        {
+            index = (index + 1) % options.Length;
+            if (!Available(options[index])) continue;
+            optionIndex = index;
+            selector.text = options[index].name.Trim();
+            break;
+        }
+
+        UpdateOptionControls();
+    }
+
+    // Skipped: options with no name, and "rock size" / "sample size" unless the HD Cam is fitted
+    static bool Available(OptionSetting o) =>
+        o != null && !string.IsNullOrWhiteSpace(o.name)
+        && (RoverCamera.HasHDCamera || !RoverCamera.IsHDOnly(o.name));
+
+    // The option with this name (spaces and capitals don't matter), -1 if none
+    int FindOption(string text)
+    {
+        if (options == null || text == null) return -1;
+        return System.Array.FindIndex(options, o => o != null && o.name != null
+            && string.Equals(o.name.Trim(), text.Trim(), System.StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Tell the designer once about option lists that can't work well (empty or repeated names)
+    void CheckOptions()
+    {
+        if (options == null) return;
+        var names = new System.Collections.Generic.HashSet<string>();
+        foreach (OptionSetting o in options)
+        {
+            string problem = null;
+            if (o == null || string.IsNullOrWhiteSpace(o.name)) problem = "has an option with no name (it is skipped)";
+            else if (!names.Add(o.name.Trim().ToLowerInvariant())) problem = "lists '" + o.name.Trim() + "' twice";
+            if (problem == null) continue;
+            string text = "[CodeBlock] The " + type + " block " + problem + ". Fix its Options in the Inspector.";
+            if (warned.Add(text)) Debug.LogWarning(text, this);
+        }
+    }
+
+    void UpdateOptionControls()
+    {
+        if (options == null || selector == null)
+            return;
+
+        if (optionIndex < 0 || optionIndex >= options.Length) optionIndex = FindOption(selector.text);
+
+        bool show = optionIndex >= 0 && options[optionIndex] != null && options[optionIndex].hasComparison;
+
+        if (compare != null)
+            compare.transform.parent.gameObject.SetActive(show);
+
+        if (valueInput != null)
+            valueInput.gameObject.SetActive(show);
     }
 
     static void Cycle(TMP_Text chip, string[] list)

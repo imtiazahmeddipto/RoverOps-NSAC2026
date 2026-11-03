@@ -29,6 +29,7 @@ public class RoverSuspension : MonoBehaviour
     public float probeDepth = 6f;           // how deep a wheel looks for ground under it (m)
 
     Rover rover;
+    RoverCamera roverCamera;
     Rigidbody rb;
 
     Transform[] wheels;                     // the wheels this was set up for (they change when parts change)
@@ -46,6 +47,7 @@ public class RoverSuspension : MonoBehaviour
     void Awake()
     {
         rover = GetComponent<Rover>();
+        roverCamera = GetComponent<RoverCamera>();
         rb = GetComponent<Rigidbody>();
         height = transform.position.y;
     }
@@ -242,7 +244,7 @@ public class RoverSuspension : MonoBehaviour
         float best = Mathf.Infinity;
         foreach (RaycastHit hit in Physics.RaycastAll(from, Vector3.down, distance, groundLayers, QueryTriggerInteraction.Ignore))
         {
-            if (hit.collider.transform.IsChildOf(transform) || RoverCamera.IsSample(hit.collider)) continue;
+            if (hit.collider.transform.IsChildOf(transform) || roverCamera.IsSample(hit.collider)) continue;
             if (hit.distance < best) { best = hit.distance; y = hit.point.y; }
         }
         return best < Mathf.Infinity;

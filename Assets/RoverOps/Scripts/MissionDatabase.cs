@@ -5,7 +5,7 @@ using UnityEngine.Video;
 
 // One star goal of a mission. Only the text for now.
 // TODO: what the goal checks (time, battery, samples...) so the mission scene can award the star.
-public enum GoalType { Finish, MaxBlocks, MaxTime, MinBattery, MinSamples }
+public enum GoalType { Finish, MaxBlocks, MaxTime, MinBattery, MinSamples, MinAnalysesSent, MinPhotosSent }   // add new ones at the END
 
 // One star goal of a mission: what it checks and the number to beat
 [Serializable]
@@ -27,6 +27,8 @@ public class StarGoal
                 case GoalType.MaxTime: return "Finish in " + value + "s or less";
                 case GoalType.MinBattery: return "Finish with " + value + "% battery or more";
                 case GoalType.MinSamples: return "Collect " + value + " samples";
+                case GoalType.MinAnalysesSent: return "Send " + value + " target rock analyses to the lander";
+                case GoalType.MinPhotosSent: return "Send " + value + " target photos to the lander";
                 default: return "Reach the finish line";
             }
         }

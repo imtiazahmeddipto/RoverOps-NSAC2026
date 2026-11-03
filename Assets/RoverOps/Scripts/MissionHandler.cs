@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -12,6 +13,25 @@ public class MissionHandler : MonoBehaviour
     public Transform finishLine;
     public Vector3 finishSize = new Vector3(4f, 3f, 1f);
 
+    // How this mission ends:
+    //   FinishLine  - the rover's nose reaches the finish zone (as before)
+    //   SendData    - the lander has received the data below (Send Data block, within the Lander's range)
+    //   Both        - the data is sent AND the rover is in the finish zone
+    //   CollectSamples - only the samples below (no finish line, no data)
+    // Samples To Collect is an extra goal in ANY mode: 0 = not needed (and not shown in the status).
+    public enum FinishBy { FinishLine, SendData, Both, CollectSamples }   // new ones at the END (scenes save the number)
+
+    [Header("How the mission ends")]
+    public FinishBy finishBy = FinishBy.FinishLine;
+    [Min(0)] public int analysesToSend = 1;            // analyses of rocks WITH an AnalysisTarget the lander must receive
+    [Min(0)] public int photosToSend = 0;              // photos WITH a PhotoTarget in them the lander must receive
+    [Min(0)] public int samplesToCollect = 0;          // samples the rover must have in its sample box (0 = not needed)
+
+    bool NeedsFinish => finishBy == FinishBy.FinishLine || finishBy == FinishBy.Both;
+    bool NeedsData => finishBy == FinishBy.SendData || finishBy == FinishBy.Both;
+    bool NeedsSamples => samplesToCollect > 0;
+    bool HasGoal => NeedsFinish || NeedsData || NeedsSamples;
+
     [Header("Results Panel")]
     public GameObject resultsPanel;
     public Transform starGoals;
@@ -24,9 +44,14 @@ public class MissionHandler : MonoBehaviour
     public string missionsScene = "Mission";
     public Transition transition;                       // optional: plays the transition before loading the garage
 
+    public static MissionHandler Current { get; private set; }   // the Rover asks it why a run failed
+
     private MissionData mission;
     private string scene;
     private bool completed;
+
+    void OnEnable() => Current = this;
+    void OnDisable() { if (Current == this) Current = null; }
 
     void Start()
     {
@@ -40,7 +65,6 @@ public class MissionHandler : MonoBehaviour
         }
 
         mission = database.Find(scene, out _, out _);
-        missionNameText.text = mission.title;
 
         if (mission == null)
         {
@@ -48,6 +72,22 @@ public class MissionHandler : MonoBehaviour
                 "[Mission] Scene '" + scene +
                 "' is not in the Mission Database.", this);
         }
+        else if (missionNameText != null)
+        {
+            missionNameText.text = mission.title;
+        }
+
+        if (finishBy == FinishBy.CollectSamples && samplesToCollect == 0)
+            Debug.LogWarning("[Mission] Finish By is CollectSamples but Samples To Collect is 0: the mission can't end. Set it to 1 or more.", this);
+
+        if (NeedsData && Lander.Count == 0)
+            Debug.LogWarning("[Mission] This mission ends by sending data, but the scene has no Lander.", this);
+
+        if (NeedsFinish && finishLine == null)
+            Debug.LogWarning("[Mission] This mission ends at the finish line, but Finish Line is not assigned.", this);
+
+        if (NeedsData && analysesToSend == 0 && photosToSend == 0)
+            Debug.LogWarning("[Mission] Ends by sending data, but Analyses To Send and Photos To Send are both 0: any sent data finishes it.", this);
 
         if (rover == null)
         {
@@ -62,14 +102,97 @@ public class MissionHandler : MonoBehaviour
 
     void Update()
     {
-        if (completed || !Rover.IsRunning)
+        if (completed || !Rover.IsRunning || !HasGoal)      // no goal set: never ends by itself
             return;
 
-        if (rover.nose == null || finishLine == null)
-            return;
-
-        if (InFinish(rover.nose.position))
+        if ((!NeedsFinish || ReachedFinish())
+            && (!NeedsData || DataDelivered())
+            && (!NeedsSamples || rover.Samples >= samplesToCollect))
             Complete();
+    }
+
+    // The mission's goal for the status panel, e.g. "Finish line 12.3 m" / "Send Analysis 0/1" / "Samples 1/3"
+    public string Objective()
+    {
+        var parts = new List<string>();
+
+        if (NeedsFinish && finishLine != null)
+            parts.Add(ReachedFinish() ? Done("Finish line reached") : "Finish line " + FinishDistance().ToString("0.0") + " m");
+
+        if (NeedsData)
+        {
+            if (analysesToSend > 0) parts.Add(Count("Send Analysis", rover.AnalysesSent, analysesToSend));
+            if (photosToSend > 0) parts.Add(Count("Send Photo", rover.PhotosSent, photosToSend));
+            if (analysesToSend == 0 && photosToSend == 0)
+                parts.Add(Count("Send Data", rover.AnalysesSent + rover.PhotosSent > 0 ? 1 : 0, 1));
+        }
+
+        if (NeedsSamples)
+            parts.Add(Count("Samples", rover.Samples, samplesToCollect));
+
+        return string.Join("    ", parts);
+    }
+
+    static string Count(string label, int have, int need)
+    {
+        string text = label + " " + Mathf.Min(have, need) + "/" + need;
+        return have >= need ? Done(text) : text;
+    }
+
+    static string Done(string text) => "<color=#7CFC7C>" + text + "</color>";
+
+    // Ground distance from the rover's nose to the nearest edge of the finish zone (0 inside it)
+    float FinishDistance()
+    {
+        Vector3 nose = rover.nose != null ? rover.nose.position : rover.transform.position;
+        Vector3 local = Quaternion.Inverse(finishLine.rotation) * (nose - finishLine.position);
+        Vector3 half = finishSize / 2f;
+        Vector3 inside = new Vector3(Mathf.Clamp(local.x, -half.x, half.x),
+                                     Mathf.Clamp(local.y, -half.y, half.y),
+                                     Mathf.Clamp(local.z, -half.z, half.z));
+        Vector3 offset = nose - (finishLine.position + finishLine.rotation * inside);
+        offset.y = 0f;
+        return offset.magnitude;
+    }
+
+    bool ReachedFinish()
+    {
+        return rover.nose != null && finishLine != null && InFinish(rover.nose.position);
+    }
+
+    // Why the mission isn't complete yet (null = nothing missing / already complete)
+    public string Missing()
+    {
+        if (completed) return null;
+        if (!HasGoal) return "This mission has no goal set in its MissionHandler.";
+        var reasons = new List<string>();
+
+        if (NeedsFinish && !ReachedFinish())
+            reasons.Add("The rover didn't reach the finish line.");
+
+        if (NeedsSamples && rover.Samples < samplesToCollect)
+            reasons.Add("The rover collected only " + rover.Samples + "/" + samplesToCollect + " samples.");
+
+        if (NeedsData && !DataDelivered())
+        {
+            var got = new List<string>();
+            if (analysesToSend > 0) got.Add(rover.AnalysesSent + "/" + analysesToSend + " target rock analyses");
+            if (photosToSend > 0) got.Add(rover.PhotosSent + "/" + photosToSend + " target photos");
+            reasons.Add(got.Count > 0
+                ? "The lander got only " + string.Join(" and ", got) + "."
+                : "The lander got no data.");
+        }
+
+        return reasons.Count > 0 ? string.Join(" ", reasons) : null;
+    }
+
+    // The lander has everything this mission asks for (and at least something was sent)
+    bool DataDelivered()
+    {
+        int sent = rover.AnalysesSent + rover.PhotosSent;
+        return sent > 0
+            && rover.AnalysesSent >= analysesToSend
+            && rover.PhotosSent >= photosToSend;
     }
 
     // --------------------------------------------------
@@ -183,6 +306,12 @@ public class MissionHandler : MonoBehaviour
 
             case GoalType.MinSamples:
                 return rover.Samples >= goal.value;
+
+            case GoalType.MinAnalysesSent:
+                return rover.AnalysesSent >= goal.value;
+
+            case GoalType.MinPhotosSent:
+                return rover.PhotosSent >= goal.value;
 
             default:
                 return false;

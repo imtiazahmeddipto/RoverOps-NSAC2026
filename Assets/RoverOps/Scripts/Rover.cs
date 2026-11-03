@@ -13,20 +13,36 @@ public enum Block
     CollectSample, Wait,                                             // actions
     If, Else, EndIf,                                                 // conditions
     RepeatTimes, RepeatWhile, RepeatForever, EndRepeat,              // loops
-    Stop
+    Stop,
+    AnalyzeRock, TakePhoto, SendData                                 // science (kept at the END: blocks already in scenes keep their type)
 }
 
 // The rover: wheels, crash sensor, drill, readings, variables and the code-block runner.
 //
 // READINGS (the camera is always on):  rock dist, sample dist, sample angle, samples, battery (%)
-// Every number slot also accepts a reading or variable name, e.g.  Turn Right [sample angle]
+//           rock size, sample size (m, biggest side of the nearest rock / sample) - HD Cam only;
+//           RUN refuses a program that uses them without one
+//           rock detected, sample detected, lander detected (yes / no)
+//           lander dist, lander angle (camera: the Lander's layer must be set on RoverCamera)
+//           data (analyses + photos waiting to be sent)
 //
-// One sensor rule: an "If" placed right after a Move WATCHES the camera during that move.
-// The moment its test is true, the move is cancelled and the If part runs.
-// If the move finishes first, the Else part runs. Any other If checks once.
+// SCIENCE:  Analyze Rock (drill arm on a rock in reach), Take Photo (onboard camera),
+//           Send Data (everything waiting goes to a Lander, only within its range)
+// Every number slot also accepts a reading or variable name, e.g.  Turn Right [sample angle]
+// "sample angle" / "rock angle" are signed (+ right, - left), so Turn Left [sample angle] and
+// Turn Right [sample angle] both turn toward the sample (and [rock angle] toward the nearest rock).
+//
+// One sensor rule: an "If" placed right after a Move or a Turn WATCHES the camera during that move / turn.
+// The moment its test is true, the move / turn is cancelled and the If part runs.
+// If the move / turn finishes first, the test is checked once more: true runs the If part, false the Else part.
+// Any other If checks once.
+//
+// Moves and turns are both ORDERS: the program sets stopAt / turnLeft, FixedUpdate carries them out,
+// and cancelling is just clearing the order. No extra coroutines, so nothing can keep turning on its own.
 public class Rover : MonoBehaviour
 {
-    public static readonly string[] Readings = { "rock dist", "sample dist", "sample angle", "samples", "battery" };
+    public static readonly string[] Readings = { "rock detected", "rock dist", "rock angle", "rock size", "sample detected", "sample dist", "sample size", "sample angle",
+                                                 "lander detected", "lander dist", "lander angle", "samples", "battery", "data" };
 
     [Header("Stats")]
     public float mass = 300f;           // kg (heavier = slower to speed up and to stop)
@@ -47,6 +63,18 @@ public class Rover : MonoBehaviour
     public float cameraPower = 0.1f;    // energy the camera uses per second while a program runs (set by the Camera part)
     public int sampleCapacity = 3;      // samples the sample box holds (set by the drill part)
     public float restartLevel = 0.2f;   // an empty battery must recharge to this part (20 %) before the rover moves again
+
+    [Header("Science (Analyze Rock / Take Photo / Send Data)")]
+    public float analyzeEnergy = 5f;    // cost of analyzing one rock (heavier rovers use more, like drilling)
+    public float photoEnergy = 1f;      // cost of one photo
+    public float photoTime = 0.5f;      // seconds to take a photo
+    [Min(1)] public int photoCapacity = 1;  // photos the rover can hold until Send Data
+    [Min(1)] public int analysisCapacity = 1;   // rock analyses the rover can hold until Send Data
+    public float sendEnergy = 2f;       // cost of sending one analysis (a photo counts the same)
+    public float sendTime = 1f;         // seconds to send one analysis (a photo takes twice as long)
+    public RawImage photoPreview;       // optional: shows the last photo, then fades out
+    public float previewTime = 3f;      // seconds the photo stays fully visible
+    public float previewFadeTime = 0.5f;// seconds to fade out
 
     [Header("Links")]
     public RoverCamera cam;
@@ -76,12 +104,25 @@ public class Rover : MonoBehaviour
     bool crashed, failed;
     int samples;
     float runStart, runTime;
+    bool programDone;                   // every block has run: the run stays open (clock stopped) until the player presses STOP
+    string failText;                    // why the run failed (shown again when the player presses STOP)
     public float RunTime => runTime;
     int blockCount;
     public int BlockCount => blockCount;        // blocks in the last program (not counting "When mission starts")
     public int Samples => samples;
     public void EndMission(string text) => StopProgram(text);   // the MissionHandler stops the run at the finish line
     readonly List<GameObject> collected = new List<GameObject>();
+
+    // science data: Analyze Rock / Take Photo store it, Send Data moves it to the lander
+    readonly HashSet<Collider> analyzedRocks = new HashSet<Collider>();
+    readonly List<Texture2D> photos = new List<Texture2D>();
+    readonly List<PhotoTarget> waitingPhotos = new List<PhotoTarget>();   // one per photo waiting to send: its target (null = none)
+    readonly List<AnalysisTarget> waitingAnalyses = new List<AnalysisTarget>();   // one per analysis waiting to send: its target (null = not a target rock)
+    int analysesSent, photosSent, wrongPhotos, wrongAnalyses;
+    public int AnalysesSent => analysesSent;     // the MissionHandler checks these
+    public int PhotosSent => photosSent;         // only data of TARGETS counts
+    int DataWaiting => waitingAnalyses.Count + waitingPhotos.Count;
+    Coroutine previewRoutine;                    // the photo preview's show-then-fade (UI only, not part of the program)
 
     // motion order (FixedUpdate carries it out)
     float stopAt = -1f;                 // odometer reading to stop on (-1 = no move, the rover brakes)
@@ -93,6 +134,12 @@ public class Rover : MonoBehaviour
     public float BatteryPercent => batteryCapacity > 0f ? energy / batteryCapacity * 100f : 0f;
 
     bool Moving => stopAt >= 0f;
+
+    // turn order (FixedUpdate carries it out, like a move)
+    float turnLeft;                     // degrees still to turn (0 = no turn)
+    float turnDir = 1f;                 // +1 right, -1 left
+    bool Turning => turnLeft > 0f;
+    bool InMotion => Moving || Turning;
     float MassFactor => mass / 300f;
 
     void Awake()
@@ -108,6 +155,7 @@ public class Rover : MonoBehaviour
         flatPos = startPosition;
         heading = startRotation.eulerAngles.y;
         IsRunning = false;
+        HidePreview();
         SetRunLabel();
         Say("Drag blocks under 'When mission starts', then press RUN");
     }
@@ -151,6 +199,8 @@ public class Rover : MonoBehaviour
             Say("Battery at " + BatteryPercent.ToString("0") + "%: carrying on");
         }
 
+        if (Turning && speed <= 0f) { Rotate(dt); return; }              // turns happen on the spot, standing still
+
         bool go = false;
         if (Moving)
         {
@@ -172,6 +222,18 @@ public class Rover : MonoBehaviour
         odometer += step;
         UseEnergy(step * energyPerMeter);
         if (Touching()) Crash("The rover crashed!");
+    }
+
+    // One physics step of a turn order
+    void Rotate(float dt)
+    {
+        float step = Mathf.Min(turnSpeed * dt, turnLeft);
+        heading += step * turnDir;
+        turnLeft -= step;
+        if (turnLeft < 0.001f) turnLeft = 0f;                           // arrived on the mark
+        SpinWheels(0f, step * turnDir);
+        UseEnergy(step / 90f * energyPerTurn);
+        if (Touching()) Crash("The rover crashed while turning!");
     }
 
     bool Touching()
@@ -211,7 +273,13 @@ public class Rover : MonoBehaviour
     // ---------------- BUTTONS ----------------
     public void Run()                   // RUN button (shows STOP while a program runs)
     {
-        if (IsRunning) { StopProgram("Program stopped"); return; }
+        if (IsRunning)
+        {
+            StopProgram(programDone && failText != null
+                ? "<color=#FF6B6B>MISSION NOT COMPLETE. " + failText + " Try again.</color>"
+                : "Program stopped");
+            return;
+        }
         var all = new List<CodeBlock>(programArea.GetComponentsInChildren<CodeBlock>());
         int start = all.FindIndex(b => b.type == Block.Start);
         if (start < 0) { Say("Add a 'When mission starts' block first"); return; }
@@ -219,6 +287,7 @@ public class Rover : MonoBehaviour
 
         MarkError(null);
         string problem = CheckStructure(script, out CodeBlock bad);           // every If / Repeat needs its End
+        if (problem == null) problem = CheckParts(script, out bad);           // and the parts for its readings
         if (problem != null)
         {
             MarkError(bad);
@@ -230,6 +299,8 @@ public class Rover : MonoBehaviour
         blockCount = script.Count;
         runStart = Time.time;
         runTime = 0f;
+        programDone = false;
+        failText = null;
         failed = false;
         IsRunning = true;
         SetRunLabel();
@@ -247,6 +318,7 @@ public class Rover : MonoBehaviour
         foreach (GameObject sample in collected) sample.SetActive(true);
         collected.Clear();
         samples = 0;
+        ClearData();
         Refill();
         if (drillArm) drillArm.ResetPose();
     }
@@ -268,8 +340,10 @@ public class Rover : MonoBehaviour
 
     void EndProgram(string text)
     {
-        if (IsRunning) runTime = Time.time - runStart;   // freeze the exact time the run ended
+        if (IsRunning && !programDone) runTime = Time.time - runStart;   // freeze the exact time the run ended
+        programDone = false;
         stopAt = -1f;                   // the rover brakes to a stop by itself
+        turnLeft = 0f;                  // and stops turning at once
         IsRunning = false;
         Highlight(null);
         SetRunLabel();
@@ -283,7 +357,15 @@ public class Rover : MonoBehaviour
         yield return RunBlocks(blocks);
         if (failed) yield break;
         yield return BrakeToStop();
-        EndProgram("Program finished");
+        runTime = Time.time - runStart;                 // the clock stops when the last block is done...
+        programDone = true;                             // ...but the run stays open: only STOP ends it
+
+        // A complete mission ends the run itself (MissionHandler), so getting here means it isn't done
+        MissionHandler handler = MissionHandler.Current;
+        if (handler != null && handler.Missing() == null) yield break;    // complete: the handler ends the run this frame
+        failText = handler != null ? handler.Missing() : "The program ended before the mission was done.";
+        Say("<color=#FF6B6B>MISSION NOT COMPLETE. " + failText + "\nPress STOP and try again.</color>");
+        Debug.LogWarning("[Rover] Mission not complete: " + failText);
     }
 
     IEnumerator RunBlocks(List<CodeBlock> blocks)
@@ -302,20 +384,31 @@ public class Rover : MonoBehaviour
                     if (failed) break;
                     if (block.type == Block.MoveBackward) meters = -meters;
                     yield return StartMove(meters);
-                    bool watched = i + 1 < blocks.Count && blocks[i + 1].type == Block.If;
-                    if (!watched) while (Moving) yield return null;               // wait for the move to finish
-                    break;                                                        // else: the If after it watches the move
+                    if (!WatchedByNextIf(blocks, i)) while (Moving) yield return null;      // wait for the move to finish
+                    break;                                                                 // else: the If after it watches the move
 
                 case Block.TurnLeft:
                 case Block.TurnRight:
                     float degrees = Num(block, 90f);
                     if (failed) break;
-                    yield return Turn(block.type == Block.TurnLeft ? -degrees : degrees);
-                    break;
+                    if (IsAimReading(block.ValueText))                    // [sample / rock / lander angle] already says which way (+ right, - left):
+                    {                                                     // Turn Left and Turn Right both turn TOWARD it
+                        string aim = Key(block.ValueText);
+                        string what = aim == "rockangle" ? "rock" : aim == "landerangle" ? "lander" : "sample";
+                        float seenAt = what == "rock" ? cam.RockDistance : what == "lander" ? cam.LanderDistance : cam.SampleDistance;
+                        if (float.IsInfinity(seenAt)) Say("No " + what + " in view: not turning");
+                    }
+                    else if (block.type == Block.TurnLeft) degrees = -degrees;
+                    yield return StartTurn(degrees);
+                    if (!WatchedByNextIf(blocks, i)) while (Turning) yield return null;     // wait for the turn to finish
+                    break;                                                                 // else: the If after it watches the turn
 
                 // ----- sensors & actions -----
 
                 case Block.CollectSample: yield return CollectSample(); break;
+                case Block.AnalyzeRock: yield return AnalyzeRock(); break;
+                case Block.TakePhoto: yield return TakePhoto(); break;
+                case Block.SendData: yield return SendData(); break;
 
                 case Block.Wait:
                     float seconds = Num(block, 1f);
@@ -327,7 +420,7 @@ public class Rover : MonoBehaviour
                 // ----- conditions -----
                 case Block.If:
                     bool yes = false;
-                    bool watching = Moving && i > 0 && (blocks[i - 1].type == Block.MoveForward || blocks[i - 1].type == Block.MoveBackward);
+                    bool watching = i > 0 && IsMotion(blocks[i - 1].type) && InMotion;
                     yield return CheckIf(block, watching, result => yes = result);
                     if (failed) break;
                     if (!yes) i = FindIfEnd(blocks, i, true);                     // jump to Else (or End If)
@@ -377,6 +470,8 @@ public class Rover : MonoBehaviour
 
     // ---------------- STRUCTURE CHECK ----------------
     static bool IsLoop(Block t) => t == Block.RepeatTimes || t == Block.RepeatWhile || t == Block.RepeatForever;
+    static bool IsMotion(Block t) => t == Block.MoveForward || t == Block.MoveBackward || t == Block.TurnLeft || t == Block.TurnRight;
+    static bool WatchedByNextIf(List<CodeBlock> blocks, int i) => i + 1 < blocks.Count && blocks[i + 1].type == Block.If;
 
     // Every If needs an End If, every Repeat / While needs an End Repeat, and they must not cross.
     // Returns null when the program is fine, otherwise the problem and the block that causes it.
@@ -421,6 +516,21 @@ public class Rover : MonoBehaviour
         return IsLoop(bad.type) ? "this Repeat has no End Repeat" : "this If has no End If";
     }
 
+    // Readings that need a part the rover doesn't have: rock size and sample size need the HD Cam
+    static string CheckParts(List<CodeBlock> blocks, out CodeBlock bad)
+    {
+        bad = null;
+        if (RoverCamera.HasHDCamera) return null;
+        foreach (CodeBlock b in blocks)
+            if (RoverCamera.IsHDOnly(b.Selected) || RoverCamera.IsHDOnly(b.ValueText))
+            {
+                bad = b;
+                string reading = RoverCamera.IsHDOnly(b.Selected) ? b.Selected.Trim() : b.ValueText;
+                return "'" + reading + "' needs the " + RoverCamera.HDCameraName + ". Fit it in the garage";
+            }
+        return null;
+    }
+
     void MarkError(CodeBlock block)          // tint a faulty block red
     {
         if (errorBlock) errorBlock.body.GetComponent<Image>().color = Color.white;
@@ -428,25 +538,30 @@ public class Rover : MonoBehaviour
         if (block) block.body.GetComponent<Image>().color = new Color(1f, 0.55f, 0.55f);
     }
 
-    // The If test. While watching a move, it tests every frame until the move ends.
-    IEnumerator CheckIf(CodeBlock block, bool watchMove, System.Action<bool> answer)
+    // The If test. While watching a move or turn, it tests every frame until that move / turn ends.
+    // True during the motion: cancel it, stop, answer true (If part).
+    // Motion finished first: test once more with a fresh scan (true = If part, false = Else part).
+    IEnumerator CheckIf(CodeBlock block, bool watchMotion, System.Action<bool> answer)
     {
-        if (watchMove)
+        if (watchMotion)
         {
-            Say("Moving and watching: " + block.Selected + " " + block.Sign + " " + block.ValueText + " ?");
-            while (Moving)
+            Say((Turning ? "Turning" : "Moving") + " and watching: " + block.Selected + " " + block.Sign + " " + block.ValueText + " ?");
+            while (InMotion)
             {
-                if (Test(block, out string hit, false))
+                bool hit = Test(block, out string seen, false);          // the camera scans every frame by itself
+                if (failed) { answer(false); yield break; }
+                if (hit)
                 {
-                    Say("If " + hit + ". Move cancelled.");
-                    yield return BrakeToStop();
+                    string what = Turning ? "Turn" : "Move";
+                    Say("If " + seen + ". " + what + " cancelled.");
+                    yield return BrakeToStop();                          // clears the move / turn order, waits until standing still
                     answer(true);
                     yield break;
                 }
-                if (failed) { answer(false); yield break; }
                 yield return null;
             }
         }
+
         bool yes = Test(block, out string text);
         Say("If " + text);
         answer(yes);
@@ -455,13 +570,32 @@ public class Rover : MonoBehaviour
     // "rock dist < 2" -> true / false, with a readable explanation
     bool Test(CodeBlock block, out string text, bool freshScan = true)
     {
-        if (freshScan) cam.Scan();
+        if (freshScan)
+            cam.Scan();
+
         Read(block.Selected, out float left);
+
+        // Yes / no conditions: rock detected, sample detected, lander detected
+        if (Key(block.Selected).EndsWith("detected"))
+        {
+            bool detected = left > 0f;
+
+            text = block.Selected.Trim() + ": " + (detected ? "YES" : "NO");
+
+            return detected;
+        }
+
+        // Normal numerical conditions
         float right = Num(block, 0f);
+
         bool yes = block.Sign == "<" ? left < right
                  : block.Sign == ">" ? left > right
                  : Mathf.Abs(left - right) < 0.05f;
-        text = block.Selected + " (" + Show(block.Selected, left) + ") " + block.Sign + " " + right.ToString("0.##") + ": " + (yes ? "YES" : "NO");
+
+        text = block.Selected + " (" + Show(block.Selected, left) + ") "
+             + block.Sign + " " + right.ToString("0.##") + ": "
+             + (yes ? "YES" : "NO");
+
         return yes;
     }
 
@@ -495,16 +629,29 @@ public class Rover : MonoBehaviour
     // ---------------- READINGS & VARIABLES ----------------
     static string Key(string name) => name.Replace(" ", "").ToLowerInvariant();
 
+    // Readings that carry their own direction: a Turn block aims by them instead of using Left / Right
+    static bool IsAimReading(string name) => Key(name) == "sampleangle" || Key(name) == "rockangle" || Key(name) == "landerangle";
+
     // A reading or variable by name. False if the name is unknown.
     bool Read(string name, out float value)
     {
         switch (Key(name))
         {
             case "rockdist": value = cam.RockDistance; return true;
+            case "rockangle": value = cam.RockAngle; return true;
+            case "rocksize": value = RoverCamera.HasHDCamera ? cam.RockSize : 0f; return true;
+            case "samplesize": value = RoverCamera.HasHDCamera ? cam.SampleSize : 0f; return true;
+            case "landerdist": value = cam.LanderDistance; return true;
+            case "landerangle": value = cam.LanderAngle; return true;
+            case "landerdetected": value = float.IsInfinity(cam.LanderDistance) ? 0f : 1f; return true;
+            case "rockdetected": value = float.IsInfinity(cam.RockDistance) ? 0f : 1f; return true;
+            case "data": value = DataWaiting; return true;
             case "sampledist": value = cam.SampleDistance; return true;
             case "sampleangle": value = cam.SampleAngle; return true;
             case "samples": value = samples; return true;
             case "battery": value = BatteryPercent; return true;
+            case "sampledetected": value = float.IsInfinity(cam.SampleDistance) ? 0f : 1f;
+                return true;
         }
         value = 0f;
         return false;
@@ -517,7 +664,7 @@ public class Rover : MonoBehaviour
         if (text == "") return defaultValue;
         if (float.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float v)) return v;
         if (Read(text, out v)) return v;
-        Fail("ERROR: '" + text + "' is not a number or a reading. Use a number, rock dist, sample dist, sample angle, samples or battery.");
+        Fail("ERROR: '" + text + "' is not a number or a reading. Use a number, rock dist, rock angle, rock size (HD Cam), sample dist, sample size (HD Cam), sample angle, samples, battery, lander dist, lander angle or data.");
         return defaultValue;
     }
 
@@ -532,8 +679,9 @@ public class Rover : MonoBehaviour
     {
         if (float.IsInfinity(value)) return "none";
         string key = Key(name);
+        if (key.EndsWith("size")) return value > 0f ? value.ToString("0.0") + " m" : "none";
         if (key.EndsWith("dist")) return value.ToString("0.0") + " m";
-        if (key == "sampleangle") return value.ToString("0") + "°";
+        if (key.EndsWith("angle")) return value.ToString("0") + "°";
         if (key == "battery") return value.ToString("0") + "%";
         return value.ToString("0.##");
     }
@@ -544,32 +692,26 @@ public class Rover : MonoBehaviour
         float dir = Mathf.Sign(meters);
         if (speed > 0f && dir != moveDir) yield return BrakeToStop();      // stop before changing direction
         Say(meters >= 0f ? "Moving forward " + meters.ToString("0.##") + " m" : "Moving back " + (-meters).ToString("0.##") + " m");
+        turnLeft = 0f;                                                      // never drive and turn at once
         moveDir = dir;
         if (Mathf.Abs(meters) > 0.005f) stopAt = odometer + Mathf.Abs(meters);
     }
 
+    // Cancels any move or turn order and waits until the rover stands still
     IEnumerator BrakeToStop()
     {
         stopAt = -1f;
+        turnLeft = 0f;
         while (speed > 0f) yield return null;
     }
 
-    IEnumerator Turn(float degrees)                      // negative = left, positive = right
+    // negative = left, positive = right. FixedUpdate turns the rover; this only gives the order.
+    IEnumerator StartTurn(float degrees)
     {
-        yield return BrakeToStop();                      // a rover turns on the spot, so it stops first
-        Say(degrees < 0f ? "Turning left " + (-degrees).ToString("0.#") + "°" : "Turning right " + degrees.ToString("0.#") + "°");
-        float turned = 0f, target = Mathf.Abs(degrees), direction = Mathf.Sign(degrees);
-        while (turned < target)
-        {
-            while (recharging) yield return null;        // empty battery: wait for the sun
-            float step = Mathf.Min(turnSpeed * Time.fixedDeltaTime, target - turned);
-            UseEnergy(step / 90f * energyPerTurn);
-            heading += step * direction;
-            SpinWheels(0f, step * direction);
-            turned += step;
-            yield return new WaitForFixedUpdate();
-            if (Touching()) { Crash("The rover crashed while turning!"); yield break; }
-        }
+        yield return BrakeToStop();                                         // a rover turns on the spot, so it stops first
+        turnDir = degrees < 0f ? -1f : 1f;
+        turnLeft = Mathf.Abs(degrees) > 0.01f ? Mathf.Abs(degrees) : 0f;
+        if (Turning) Say(degrees < 0f ? "Turning left " + (-degrees).ToString("0.#") + "°" : "Turning right " + degrees.ToString("0.#") + "°");
     }
 
     IEnumerator CollectSample()
@@ -616,6 +758,257 @@ public class Rover : MonoBehaviour
         Say("Sample collected! (" + samples + " / " + sampleCapacity + " in the sample box)");
     }
 
+    // ---------------- SCIENCE ----------------
+    // Same mechanics as Collect Sample: stop, find a rock in reach, wait for power, arm out, work, arm back
+    IEnumerator AnalyzeRock()
+    {
+        yield return BrakeToStop();                      // the drill works only when standing still
+        Collider rock = RockInReach();
+        if (rock == null) { yield return Problem("no rock within " + drillReach + " m of the drill. Get closer to a rock first."); yield break; }
+        if (analyzedRocks.Contains(rock)) { yield return Problem("this rock is already analyzed. Find another rock."); yield break; }
+        if (waitingAnalyses.Count >= analysisCapacity)
+        {
+            yield return Problem("the analysis memory is full (" + analysisCapacity + (analysisCapacity == 1 ? " analysis" : " analyses")
+                                 + "). Use Send Data before analyzing another rock.");
+            yield break;
+        }
+
+        while (recharging || energy < analyzeEnergy * MassFactor)    // the drill needs power
+        {
+            message = "<color=#FFC63A>Not enough power to analyze: waiting for the solar panel...</color>";
+            yield return null;
+        }
+        UseEnergy(analyzeEnergy);
+        if (drillArm)
+        {
+            message = "Moving the drill arm to the rock...";
+            yield return drillArm.Reach(rock.bounds.center);
+        }
+        float time = 3f / drillSpeed;
+        for (float t = 0f; t < time; t += Time.deltaTime)
+        {
+            message = "Analyzing rock... " + Mathf.RoundToInt(t / time * 100f) + "%";
+            yield return null;
+        }
+        analyzedRocks.Add(rock);
+        waitingAnalyses.Add(rock.GetComponentInParent<AnalysisTarget>());   // checked when the data reaches the lander
+        if (drillArm)
+        {
+            message = "Folding the drill arm...";
+            yield return drillArm.Fold();
+        }
+        Say("Rock analyzed! (" + DataWaiting + " waiting to send to the lander)");
+    }
+
+    // Stop, take a picture with the onboard camera and keep it until Send Data
+    IEnumerator TakePhoto()
+    {
+        if (!cam.HasCamera) { yield return Problem("no camera fitted. Fit a camera in the garage."); yield break; }
+        if (waitingPhotos.Count >= photoCapacity)
+        {
+            yield return Problem("the photo memory is full (" + photoCapacity + (photoCapacity == 1 ? " photo" : " photos")
+                                 + "). Use Send Data before taking another photo.");
+            yield break;
+        }
+        yield return BrakeToStop();                      // stand still for a sharp photo
+        while (recharging || energy < photoEnergy)       // the camera doesn't care about mass
+        {
+            message = "<color=#FFC63A>Not enough power for a photo: waiting for the solar panel...</color>";
+            yield return null;
+        }
+        for (float t = 0f; t < photoTime; t += Time.deltaTime)
+        {
+            message = "Taking photo...";
+            yield return null;
+        }
+        int rocks = cam.RocksInView, found = cam.SamplesInView;
+        PhotoTarget target = cam.TargetInView();         // checked when the data reaches the lander
+        Texture2D photo = cam.TakePhoto();
+        UseEnergy(photoEnergy, false);
+        if (photo != null)
+        {
+            photos.Add(photo);
+            ShowPreview(photo);
+        }
+        waitingPhotos.Add(target);
+        Say("Photo " + (waitingPhotos.Count + photosSent + wrongPhotos) + " taken: " + rocks + (rocks == 1 ? " rock, " : " rocks, ")
+            + found + (found == 1 ? " sample" : " samples") + " in view (" + DataWaiting + " waiting to send)");
+    }
+
+    // Send everything waiting (analyses first, then photos) to the nearest lander, if it is in range
+    IEnumerator SendData()
+    {
+        yield return BrakeToStop();
+        if (DataWaiting == 0) { yield return Problem("no data to send. Use Analyze Rock or Take Photo first."); yield break; }
+        Lander lander = Lander.Nearest(transform.position, out float distance);
+        if (lander == null) { yield return Problem("there is no lander in this mission."); yield break; }
+        if (!lander.InRange(transform.position))
+        {
+            yield return Problem("the lander is out of range (" + distance.ToString("0.0") + " m away, range "
+                                 + lander.range.ToString("0.#") + " m). Drive closer first.");
+            yield break;
+        }
+
+        int total = DataWaiting, done = 0, sentAnalyses = 0, sentPhotos = 0, wrong = 0, wrongRocks = 0;
+        var targets = new List<string>();
+        while (DataWaiting > 0)
+        {
+            bool photo = waitingAnalyses.Count == 0;     // analyses first (small), then photos
+            while (recharging || energy < sendEnergy)    // the radio doesn't care about mass
+            {
+                message = "<color=#FFC63A>Not enough power to send: waiting for the solar panel...</color>";
+                yield return null;
+            }
+            float time = sendTime * (photo ? 2f : 1f);
+            for (float t = 0f; t < time; t += Time.deltaTime)
+            {
+                message = "Sending " + (photo ? "photo" : "rock analysis") + " to the lander... "
+                          + (done + 1) + "/" + total + "  " + Mathf.RoundToInt(t / time * 100f) + "%";
+                yield return null;
+            }
+            UseEnergy(sendEnergy, false);
+            if (photo)
+            {
+                PhotoTarget target = waitingPhotos[0];
+                waitingPhotos.RemoveAt(0);
+                if (target != null)                      // the lander checks the photo: is the target in it?
+                {
+                    photosSent++;
+                    sentPhotos++;
+                    if (!targets.Contains(target.targetName)) targets.Add(target.targetName);
+                }
+                else
+                {
+                    wrongPhotos++;
+                    wrong++;
+                }
+            }
+            else
+            {
+                AnalysisTarget target = waitingAnalyses[0];
+                waitingAnalyses.RemoveAt(0);
+                if (target != null)                      // the lander checks the analysis: was it the target rock?
+                {
+                    analysesSent++;
+                    sentAnalyses++;
+                    if (!targets.Contains(target.targetName)) targets.Add(target.targetName);
+                }
+                else
+                {
+                    wrongAnalyses++;
+                    wrongRocks++;
+                }
+            }
+            done++;
+        }
+
+        string sent = "Data sent to the lander: " + sentAnalyses + (sentAnalyses == 1 ? " analysis, " : " analyses, ")
+                    + sentPhotos + (sentPhotos == 1 ? " photo" : " photos")
+                    + (targets.Count > 0 ? " (target: " + string.Join(", ", targets) + ")" : "");
+        if (wrong == 0 && wrongRocks == 0)
+        {
+            Say("<color=#7CFC7C>" + sent + "</color>");
+            yield break;
+        }
+
+        var errors = new List<string>();
+        if (wrongRocks > 0)
+            errors.Add("WRONG ANALYSIS! " + (wrongRocks == 1 ? "1 analysis is" : wrongRocks + " analyses are")
+                       + " not of the target rock. Analyze the target rock.");
+        if (wrong > 0)
+            errors.Add("WRONG PHOTO! " + (wrong == 1 ? "1 photo has" : wrong + " photos have")
+                       + " no target in it. Take the targeted photo.");
+        string error = string.Join("\n", errors);
+        Say("<color=#FF6B6B>" + error + "</color>\n" + sent);
+        Debug.LogWarning("[Rover] " + error);
+        yield return new WaitForSeconds(1.5f);           // keep the message up a moment, then carry on
+    }
+
+    // A block that can't do its job: show why, wait a moment, carry on (like Collect Sample)
+    IEnumerator Problem(string error)
+    {
+        error = "ERROR: " + error;
+        Say("<color=#FF6B6B>" + error + "</color>");
+        Debug.LogError("[Rover] " + error);
+        yield return new WaitForSeconds(1f);
+    }
+
+    // The nearest rock closer than drillReach to the nose, in front of the rover
+    Collider RockInReach()
+    {
+        Collider best = null;
+        float bestDistance = drillReach;
+        foreach (Collider c in Physics.OverlapSphere(nose.position, drillReach + 1f))
+        {
+            if (!cam.IsRock(c) || cam.IsSample(c)) continue;
+            Vector3 point = c.bounds.ClosestPoint(nose.position);
+            if (Vector3.Dot(point - nose.position, transform.forward) < -0.2f) continue;   // behind the nose
+            float distance = cam.GroundDistance(point);
+            if (distance < bestDistance) { bestDistance = distance; best = c; }
+        }
+        return best;
+    }
+
+    // Restart: no data, no photos
+    void ClearData()
+    {
+        foreach (Texture2D photo in photos) if (photo) Destroy(photo);
+        photos.Clear();
+        analyzedRocks.Clear();
+        waitingPhotos.Clear();
+        waitingAnalyses.Clear();
+        analysesSent = photosSent = wrongPhotos = wrongAnalyses = 0;
+        HidePreview();
+    }
+
+    void OnDestroy()
+    {
+        foreach (Texture2D photo in photos) if (photo) Destroy(photo);
+    }
+
+    // ---------------- PHOTO PREVIEW ----------------
+    // Shows the photo for previewTime seconds, then fades it out. A new photo starts the timer again.
+    // Fades a CanvasGroup on the preview if it has one (frame and children fade too), otherwise the RawImage's alpha.
+    void ShowPreview(Texture2D photo)
+    {
+        if (photoPreview == null) return;
+        if (previewRoutine != null) StopCoroutine(previewRoutine);
+        photoPreview.texture = photo;
+        previewRoutine = StartCoroutine(PreviewThenFade());
+    }
+
+    IEnumerator PreviewThenFade()
+    {
+        photoPreview.gameObject.SetActive(true);
+        SetPreviewAlpha(1f);
+        yield return new WaitForSeconds(previewTime);
+        for (float t = 0f; t < previewFadeTime; t += Time.deltaTime)
+        {
+            SetPreviewAlpha(1f - t / previewFadeTime);
+            yield return null;
+        }
+        previewRoutine = null;
+        HidePreview();
+    }
+
+    void HidePreview()
+    {
+        if (previewRoutine != null) { StopCoroutine(previewRoutine); previewRoutine = null; }
+        if (photoPreview == null) return;
+        SetPreviewAlpha(0f);
+        photoPreview.texture = null;
+        photoPreview.gameObject.SetActive(false);
+    }
+
+    void SetPreviewAlpha(float alpha)
+    {
+        CanvasGroup group = photoPreview.GetComponent<CanvasGroup>();
+        if (group != null) { group.alpha = alpha; return; }
+        Color color = photoPreview.color;
+        color.a = alpha;
+        photoPreview.color = color;
+    }
+
     // The nearest sample closer than drillReach to the nose, in front of the rover
     Collider SampleInReach()
     {
@@ -623,7 +1016,7 @@ public class Rover : MonoBehaviour
         float bestDistance = drillReach;
         foreach (Collider c in Physics.OverlapSphere(nose.position, drillReach + 1f))
         {
-            if (!RoverCamera.IsSample(c)) continue;
+            if (!cam.IsSample(c)) continue;
             Vector3 point = c.bounds.ClosestPoint(nose.position);
             if (Vector3.Dot(point - nose.position, transform.forward) < -0.2f) continue;   // behind the nose
             float distance = cam.GroundDistance(point);
@@ -690,16 +1083,21 @@ public class Rover : MonoBehaviour
         Debug.Log("[Rover] " + text);
     }
 
+    // Minimal panel: what the rover is doing, battery, this mission's goal (from the MissionHandler) and time.
+    // Distances, angles and sizes are on the camera's detection boxes (If blocks can still read them all).
     void ShowStatus()
     {
         if (statusText == null) return;
-        string readings = "rock dist " + Show("rock dist", cam.RockDistance) + "   sample dist " + Show("sample dist", cam.SampleDistance)
-              + "   sample angle " + Show("sample angle", cam.SampleAngle);
-        if (IsRunning) runTime = Time.time - runStart;
-        string time = IsRunning ? "Running for " + runTime.ToString("0") + "s" : runTime > 0f ? "Last run " + runTime.ToString("0.0") + "s" : "";
-        string text = message + "\n" + time + "\n\n" + readings + "\nsamples " + samples
-                            + "\nspeed " + speed.ToString("0.0") + " m/s   odometer " + odometer.ToString("0.0") + " m   battery " + Show("battery", BatteryPercent)
-                    + (recharging ? " <color=#FFC63A>(recharging)</color>" : "");
-        statusText.text = text;
+        if (IsRunning && !programDone) runTime = Time.time - runStart;
+
+        string stats = "Battery " + BatteryPercent.ToString("0") + "%"
+                     + (recharging ? " <color=#FFC63A>charging</color>" : "");
+        string goal = MissionHandler.Current != null ? MissionHandler.Current.Objective() : "";   // depends on the mission
+        if (goal != "") stats += "    " + goal;
+
+        string time = IsRunning ? "    Time " + runTime.ToString(programDone ? "0.0" : "0") + "s"
+                    : runTime > 0f ? "    Last run " + runTime.ToString("0.0") + "s" : "";
+
+        statusText.text = message + "\n\n" + stats + time;
     }
 }

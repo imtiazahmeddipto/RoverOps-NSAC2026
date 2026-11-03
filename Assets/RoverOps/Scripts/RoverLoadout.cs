@@ -68,10 +68,13 @@ public class RoverLoadout : MonoBehaviour
             rover.energyPerMeter = wheels.Stat(2);
         }
         PartData cam = database.Equipped(PartType.Camera);
+
         if (cam != null)
         {
             rover.cam.SetLens(cam.Stat(0), rover.cam.viewAngle);
             rover.cameraPower = cam.Stat(1);
+
+            rover.cam.SetCameraType(cam.name);
         }
         PartData battery = database.Equipped(PartType.Battery);
         if (battery != null) rover.batteryCapacity = battery.Stat(0);
@@ -104,7 +107,6 @@ public class RoverLoadout : MonoBehaviour
             Bounds b = WorldBounds(camPart);
             Vector3 forward = transform.forward;
             float frontHalf = Mathf.Abs(forward.x) * b.extents.x + Mathf.Abs(forward.y) * b.extents.y + Mathf.Abs(forward.z) * b.extents.z;
-            rover.cam.onboardCamera.transform.position = b.center + forward * (frontHalf + 0.03f);   // on the lens
         }
 
         // the rover's size in its own space (for the crash box and the nose)

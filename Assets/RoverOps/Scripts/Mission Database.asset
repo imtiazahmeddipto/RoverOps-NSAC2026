@@ -41,8 +41,8 @@ MonoBehaviour:
         value: 0
         text: Reach the goal.
       - type: 1
-        value: 3
-        text: Use maximum 3 code blocks
+        value: 2
+        text: Use maximum 2 code blocks
       - type: 2
         value: 30
         text: Finish under 30 seconds
