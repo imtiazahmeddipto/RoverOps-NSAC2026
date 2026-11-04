@@ -74,6 +74,27 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
         UpdateOptionControls();
     }
 
+    // ---------------- SET BY THE AI (ProgramBuilder) ----------------
+    // Sets the chip, sign and number slot. Empty = keep the block's default.
+    public void Setup(string option, string sign, string value)
+    {
+        if (selector != null && !string.IsNullOrWhiteSpace(option))
+        {
+            optionIndex = FindOption(option);
+            selector.text = optionIndex >= 0 ? options[optionIndex].name.Trim() : option.Trim();
+        }
+
+        if (compare != null && !string.IsNullOrWhiteSpace(sign))
+            compare.text = sign.Trim();
+
+        if (valueInput != null && !string.IsNullOrWhiteSpace(value))
+            valueInput.text = value.Trim();
+
+        UpdateOptionControls();
+    }
+
+    public bool HasOption(string option) => FindOption(option) >= 0;
+
     // Skipped: options with no name, and "rock size" / "sample size" unless the HD Cam is fitted
     static bool Available(OptionSetting o) =>
         o != null && !string.IsNullOrWhiteSpace(o.name)
@@ -129,7 +150,7 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
     // ---------------- DRAG & DROP ----------------
     public void OnBeginDrag(PointerEventData e)
     {
-        if (Rover.IsRunning) return;
+        if (Rover.IsRunning || ProgramBuilder.IsBuilding) return;
         Transform canvas = GetComponentInParent<Canvas>().rootCanvas.transform;
 
         // from the Code Editor: move this block. From the Blocks panel: drag a new copy.

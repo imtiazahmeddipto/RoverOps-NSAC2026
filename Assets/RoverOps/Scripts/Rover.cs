@@ -82,8 +82,13 @@ public class Rover : MonoBehaviour
     public Transform[] wheels;
     public float wheelRadius = 0.2f;
     public Transform programArea;       // the Code Editor's block list
-    public TMP_Text statusText;
+    public TMP_Text statusText;         // the message: what the rover is doing, errors, mission result
+    public TMP_Text statsText;          // optional: battery, mission goal and time (empty = shown under the message)
     public TMP_Text runButtonLabel;
+    public Image runButtonImage;        // optional: the RUN / STOP button's background (green / red)
+    public Color runColor = new Color(0.55f, 0.85f, 0.45f);
+    public Color stopColor = new Color(1f, 0.45f, 0.45f);
+    public TMP_Text speedLabel;         // optional: the speed button's text ("SPEED 1x"); the button's OnClick -> Rover.CycleSpeed
 
     public static bool IsRunning { get; private set; }
 
@@ -104,8 +109,6 @@ public class Rover : MonoBehaviour
     bool crashed, failed;
     int samples;
     float runStart, runTime;
-    bool programDone;                   // every block has run: the run stays open (clock stopped) until the player presses STOP
-    string failText;                    // why the run failed (shown again when the player presses STOP)
     public float RunTime => runTime;
     int blockCount;
     public int BlockCount => blockCount;        // blocks in the last program (not counting "When mission starts")
@@ -156,11 +159,39 @@ public class Rover : MonoBehaviour
         heading = startRotation.eulerAngles.y;
         IsRunning = false;
         HidePreview();
+        editorView = programArea != null ? programArea.GetComponentInParent<CodeEditorView>() : null;
         SetRunLabel();
-        Say("Drag blocks under 'When mission starts', then press RUN");
+        Say("Build your program, then press RUN");
     }
 
-    void Update() => ShowStatus();      // live telemetry
+    // Run speed: 1x / 2x / 3x, used only while a program runs (editing, results and menus stay at 1x).
+    // Game time speeds up too, so time star goals are measured the same at any speed.
+    int runSpeed = 1;
+
+    public void CycleSpeed()            // the speed button's OnClick
+    {
+        runSpeed = runSpeed % 3 + 1;
+        if (speedLabel) speedLabel.text = "SPEED " + runSpeed + "x";
+    }
+
+    void Update()
+    {
+        float scale = IsRunning ? runSpeed : 1f;
+        if (Time.timeScale != scale) Time.timeScale = scale;
+        ShowStatus();                   // live telemetry
+    }
+
+    void OnDisable() => Time.timeScale = 1f;   // leaving the scene: back to normal
+
+    // While a program runs, the Code Editor keeps the running block fully inside its frame
+    // (the highlight draws it on top, outside the frame's clipping, so it must never sit across the edge)
+    CodeEditorView editorView;
+
+    void LateUpdate()
+    {
+        if (IsRunning && highlighted != null && editorView != null)
+            editorView.Reveal(highlighted.body);
+    }
 
     // ---------------- WHEELS (every physics step) ----------------
     void FixedUpdate()
@@ -266,18 +297,19 @@ public class Rover : MonoBehaviour
     {
         crashed = true;
         speed = 0f;
-        StopProgram("<color=#FF6B6B>ROVER CRASHED. " + text + "\nPress RESTART and try again.</color>");
+        StopProgram("<color=#FF6B6B>ROVER CRASHED. " + text + "\nPress RUN to try again.</color>");
         Debug.LogWarning("[Rover] Crashed: " + text);
     }
 
     // ---------------- BUTTONS ----------------
-    public void Run()                   // RUN button (shows STOP while a program runs)
+    // The one button: RUN starts fresh (rover back at the start, full battery, samples and data reset).
+    // While running it is STOP: the rover stops where it is. A run that ends by itself turns it back into RUN.
+    public void Run()
     {
+        if (ProgramBuilder.IsBuilding) return;          // wait for the AI to finish placing blocks
         if (IsRunning)
         {
-            StopProgram(programDone && failText != null
-                ? "<color=#FF6B6B>MISSION NOT COMPLETE. " + failText + " Try again.</color>"
-                : "Program stopped");
+            StopProgram("Program stopped. Press RUN to try again.");
             return;
         }
         var all = new List<CodeBlock>(programArea.GetComponentsInChildren<CodeBlock>());
@@ -299,8 +331,6 @@ public class Rover : MonoBehaviour
         blockCount = script.Count;
         runStart = Time.time;
         runTime = 0f;
-        programDone = false;
-        failText = null;
         failed = false;
         IsRunning = true;
         SetRunLabel();
@@ -325,7 +355,7 @@ public class Rover : MonoBehaviour
 
     public void Clear()
     {
-        if (IsRunning) return;
+        if (IsRunning || ProgramBuilder.IsBuilding) return;
         MarkError(null);
         foreach (Transform child in programArea)
             if (child.GetComponent<CodeBlock>().type != Block.Start) Destroy(child.gameObject);
@@ -340,8 +370,7 @@ public class Rover : MonoBehaviour
 
     void EndProgram(string text)
     {
-        if (IsRunning && !programDone) runTime = Time.time - runStart;   // freeze the exact time the run ended
-        programDone = false;
+        if (IsRunning) runTime = Time.time - runStart;   // freeze the exact time the run ended
         stopAt = -1f;                   // the rover brakes to a stop by itself
         turnLeft = 0f;                  // and stops turning at once
         IsRunning = false;
@@ -357,15 +386,20 @@ public class Rover : MonoBehaviour
         yield return RunBlocks(blocks);
         if (failed) yield break;
         yield return BrakeToStop();
-        runTime = Time.time - runStart;                 // the clock stops when the last block is done...
-        programDone = true;                             // ...but the run stays open: only STOP ends it
 
-        // A complete mission ends the run itself (MissionHandler), so getting here means it isn't done
+        // A complete mission ends the run itself (MissionHandler): give it a frame to do so
         MissionHandler handler = MissionHandler.Current;
-        if (handler != null && handler.Missing() == null) yield break;    // complete: the handler ends the run this frame
-        failText = handler != null ? handler.Missing() : "The program ended before the mission was done.";
-        Say("<color=#FF6B6B>MISSION NOT COMPLETE. " + failText + "\nPress STOP and try again.</color>");
-        Debug.LogWarning("[Rover] Mission not complete: " + failText);
+        if (handler != null && handler.Missing() == null)
+        {
+            yield return null;
+            if (IsRunning) EndProgram("Program finished");
+            yield break;
+        }
+
+        // Every block has run but the mission isn't done: end the run, the rover stays where it is
+        string why = handler != null ? handler.Missing() : "The program ended before the mission was done.";
+        Debug.LogWarning("[Rover] Mission not complete: " + why);
+        EndProgram("<color=#FF6B6B>MISSION NOT COMPLETE. " + why + "\nPress RUN to try again.</color>");
     }
 
     IEnumerator RunBlocks(List<CodeBlock> blocks)
@@ -460,7 +494,7 @@ public class Rover : MonoBehaviour
 
             if (failed)
             {
-                EndProgram("<color=#FF6B6B>" + message + "</color>");
+                EndProgram("<color=#FF6B6B>" + message + "\nFix it, then press RUN.</color>");
                 yield break;
             }
             yield return null;          // every block takes at least one frame (keeps loops safe)
@@ -1038,7 +1072,7 @@ public class Rover : MonoBehaviour
     }
 
     // ---------------- UI ----------------
-    void Highlight(CodeBlock block)          // the running block gets a white outline and is drawn on top
+    void Highlight(CodeBlock block)          // the running block gets a black outline and is drawn on top
     {
         if (highlighted) { SetOutline(highlighted, false); SetOnTop(highlighted, false); }
         highlighted = block;
@@ -1069,13 +1103,26 @@ public class Rover : MonoBehaviour
             top.overrideSorting = true;
             top.sortingOrder = 10;
         }
-        else if (top != null) Destroy(top);
+        else if (top != null)
+        {
+            // Remove it NOW (Destroy waits until the frame ends) and re-clip: otherwise the block's images and
+            // texts keep ignoring the Code Editor frame's RectMask2D and draw outside it when zoomed or panned
+            DestroyImmediate(top);
+            foreach (MaskableGraphic g in block.GetComponentsInChildren<MaskableGraphic>(true))
+            {
+                g.RecalculateClipping();
+                g.RecalculateMasking();
+            }
+        }
     }
 
     void SetRunLabel()
     {
         if (runButtonLabel) runButtonLabel.text = IsRunning ? "STOP" : "RUN";
+        if (runButtonImage) runButtonImage.color = IsRunning ? stopColor : runColor;
     }
+
+    public void Message(string text) => Say(text);      // other scripts (the AI button) write to the Rover Status
 
     void Say(string text)
     {
@@ -1085,19 +1132,27 @@ public class Rover : MonoBehaviour
 
     // Minimal panel: what the rover is doing, battery, this mission's goal (from the MissionHandler) and time.
     // Distances, angles and sizes are on the camera's detection boxes (If blocks can still read them all).
+    const string Divider = "  |  ";
+
     void ShowStatus()
     {
-        if (statusText == null) return;
-        if (IsRunning && !programDone) runTime = Time.time - runStart;
+        if (statusText == null && statsText == null) return;
+        if (statusText == null) { statusText = statsText; statsText = null; }   // only one text given: use it for both
+        if (IsRunning) runTime = Time.time - runStart;
 
         string stats = "Battery " + BatteryPercent.ToString("0") + "%"
                      + (recharging ? " <color=#FFC63A>charging</color>" : "");
         string goal = MissionHandler.Current != null ? MissionHandler.Current.Objective() : "";   // depends on the mission
-        if (goal != "") stats += "    " + goal;
+        if (goal != "") stats += Divider + goal.Replace("    ", Divider);   // the goal's own parts too
 
-        string time = IsRunning ? "    Time " + runTime.ToString(programDone ? "0.0" : "0") + "s"
-                    : runTime > 0f ? "    Last run " + runTime.ToString("0.0") + "s" : "";
+        string time = IsRunning ? Divider + "Time " + runTime.ToString("0") + "s"
+                    : runTime > 0f ? Divider + "Last run " + runTime.ToString("0.0") + "s" : "";
 
-        statusText.text = message + "\n\n" + stats + time;
+        if (statsText != null)
+        {
+            statusText.text = message;
+            statsText.text = stats + time;
+        }
+        else statusText.text = message + "\n\n" + stats + time;
     }
 }
