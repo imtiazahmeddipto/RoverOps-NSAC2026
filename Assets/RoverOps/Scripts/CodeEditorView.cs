@@ -101,28 +101,32 @@ public class CodeEditorView : MonoBehaviour, IScrollHandler, IBeginDragHandler, 
     }
 
     // Keep the program inside the frame: it can only move when it's bigger than the view.
-    // Sideways it uses the BLOCKS' width (with indents), not the Program object's (that one is wider than the
-    // blocks), so the blocks are never pushed off the left or right edge. If they fit, they stay left-aligned.
-    public float sideMargin = 8f;       // space kept between the blocks and the frame's sides
+    // Sideways it uses the BLOCKS' width (with indents), measured in the frame's own space, so it works however
+    // the program is anchored or zoomed. Blocks that fit stay left-aligned; wider ones pan between both edges.
+    public float sideMargin = 24f;      // space kept between the blocks and the frame's sides
 
     void Clamp()
     {
         float zoom = content.localScale.x;
-        Vector2 viewSize = view.rect.size;
+        Rect frame = view.rect;
         Vector2 p = content.anchoredPosition;
 
-        BlocksWidth(out float left, out float right);           // in the program's own units
-        float min = (left - sideMargin) * zoom, max = (right + sideMargin) * zoom;
-        p.x = max - min <= viewSize.x ? -min                   // fits: left-aligned
-            : Mathf.Clamp(p.x, viewSize.x - max, -min);        // wider than the frame: pan between both edges
+        if (BlocksInView(out float left, out float right))      // the blocks' edges, in the frame's units
+        {
+            float leftLimit = frame.xMin + sideMargin, rightLimit = frame.xMax - sideMargin;
+            float shift = right - left <= rightLimit - leftLimit
+                ? leftLimit - left                                          // fits: left-aligned
+                : Mathf.Clamp(0f, rightLimit - right, leftLimit - left);    // wider: never past either edge
+            p.x += shift;
+        }
 
         float height = content.rect.height * zoom;
-        p.y = height <= viewSize.y ? 0f : Mathf.Clamp(p.y, 0f, height - viewSize.y);
+        p.y = height <= frame.height ? 0f : Mathf.Clamp(p.y, 0f, height - frame.height);
         content.anchoredPosition = p;
     }
 
-    // Left and right edge of all the blocks (their visible bodies, so indents count), seen from the program
-    void BlocksWidth(out float left, out float right)
+    // Left and right edge of all the blocks (their visible bodies, so indents count), seen from the frame
+    bool BlocksInView(out float left, out float right)
     {
         left = float.MaxValue;
         right = float.MinValue;
@@ -133,13 +137,9 @@ public class CodeEditorView : MonoBehaviour, IScrollHandler, IBeginDragHandler, 
             RectTransform shape = block != null && block.body != null ? block.body : child as RectTransform;
             if (shape == null) continue;
             shape.GetWorldCorners(corners);
-            left = Mathf.Min(left, content.InverseTransformPoint(corners[0]).x);
-            right = Mathf.Max(right, content.InverseTransformPoint(corners[2]).x);
+            left = Mathf.Min(left, view.InverseTransformPoint(corners[0]).x);
+            right = Mathf.Max(right, view.InverseTransformPoint(corners[2]).x);
         }
-        if (left > right)                                       // no blocks: the Program object itself
-        {
-            left = content.rect.xMin;
-            right = content.rect.xMax;
-        }
+        return left <= right;
     }
 }
