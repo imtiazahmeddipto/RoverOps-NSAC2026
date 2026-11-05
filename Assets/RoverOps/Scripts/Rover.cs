@@ -706,7 +706,7 @@ public class Rover : MonoBehaviour
     {
         failed = true;
         message = text;
-        Debug.LogError("[Rover] " + text);
+        Debug.LogWarning("[Rover] " + text);   // a player mistake, not a code error: LogError would trigger Error Pause
     }
 
     static string Show(string name, float value)
@@ -752,20 +752,10 @@ public class Rover : MonoBehaviour
     {
         yield return BrakeToStop();                      // drill only when standing still
         Collider sample = SampleInReach();
-        if (sample == null)
-        {
-            string error = "ERROR: no sample within " + drillReach + " m of the drill. Get closer to a sample first.";
-            Say("<color=#FF6B6B>" + error + "</color>");
-            Debug.LogError("[Rover] " + error);
-            yield return new WaitForSeconds(1f);
-            yield break;
-        }
+        if (sample == null) { yield return Problem("no sample within " + drillReach + " m of the drill. Get closer to a sample first."); yield break; }
         if (samples >= sampleCapacity)
         {
-            string error = "ERROR: the sample box is full (" + sampleCapacity + " samples). Fit a bigger drill in the garage.";
-            Say("<color=#FF6B6B>" + error + "</color>");
-            Debug.LogError("[Rover] " + error);
-            yield return new WaitForSeconds(1f);
+            yield return Problem("the sample box is full (" + sampleCapacity + " samples). Fit a bigger drill in the garage.");
             yield break;
         }
         while (recharging || energy < drillEnergy * MassFactor)        // the drill needs power
@@ -953,18 +943,14 @@ public class Rover : MonoBehaviour
             errors.Add("WRONG PHOTO! " + (wrong == 1 ? "1 photo has" : wrong + " photos have")
                        + " no target in it. Take the targeted photo.");
         string error = string.Join("\n", errors);
-        Say("<color=#FF6B6B>" + error + "</color>\n" + sent);
-        Debug.LogWarning("[Rover] " + error);
-        yield return new WaitForSeconds(1.5f);           // keep the message up a moment, then carry on
+        Fail(error);                                     // wrong data: the program stops
     }
 
-    // A block that can't do its job: show why, wait a moment, carry on (like Collect Sample)
+    // A block that can't do its job: the program stops (RunBlocks ends the run with this error in red)
     IEnumerator Problem(string error)
     {
-        error = "ERROR: " + error;
-        Say("<color=#FF6B6B>" + error + "</color>");
-        Debug.LogError("[Rover] " + error);
-        yield return new WaitForSeconds(1f);
+        Fail("ERROR: " + error);
+        yield break;
     }
 
     // The nearest rock closer than drillReach to the nose, in front of the rover
