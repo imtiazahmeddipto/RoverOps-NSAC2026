@@ -267,6 +267,20 @@ public class Rover : MonoBehaviour
         if (Touching()) Crash("The rover crashed while turning!");
     }
 
+    // The test area in the Scene view: a square of areaSize around the world centre (0, 0).
+    // Driving past its edge ends the run (see Drive).
+    void OnDrawGizmos()
+    {
+        float y = Application.isPlaying ? startPosition.y : transform.position.y;
+        Vector3 center = new Vector3(0f, y, 0f);
+        Vector3 size = new Vector3(areaSize, 0f, areaSize);
+
+        Gizmos.color = new Color(1f, 0.35f, 0.2f, 0.9f);
+        Gizmos.DrawWireCube(center, size);
+        Gizmos.color = new Color(1f, 0.35f, 0.2f, 0.06f);
+        Gizmos.DrawCube(center, size);
+    }
+
     bool Touching()
     {
         Vector3 center = rb.position + rb.rotation * body.center;
@@ -425,14 +439,15 @@ public class Rover : MonoBehaviour
                 case Block.TurnRight:
                     float degrees = Num(block, 90f);
                     if (failed) break;
-                    if (IsAimReading(block.ValueText))                    // [sample / rock / lander angle] already says which way (+ right, - left):
-                    {                                                     // Turn Left and Turn Right both turn TOWARD it
+                    if (IsAimReading(block.ValueText))                    // [sample / rock / lander angle]: like a real rover, the block decides
+                    {                                                     // the way and the reading only gives HOW MUCH. Wrong block = turns away.
                         string aim = Key(block.ValueText);
                         string what = aim == "rockangle" ? "rock" : aim == "landerangle" ? "lander" : "sample";
                         float seenAt = what == "rock" ? cam.RockDistance : what == "lander" ? cam.LanderDistance : cam.SampleDistance;
                         if (float.IsInfinity(seenAt)) Say("No " + what + " in view: not turning");
+                        degrees = Mathf.Abs(degrees);
                     }
-                    else if (block.type == Block.TurnLeft) degrees = -degrees;
+                    if (block.type == Block.TurnLeft) degrees = -degrees;
                     yield return StartTurn(degrees);
                     if (!WatchedByNextIf(blocks, i)) while (Turning) yield return null;     // wait for the turn to finish
                     break;                                                                 // else: the If after it watches the turn

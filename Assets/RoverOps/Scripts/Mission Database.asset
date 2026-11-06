@@ -26,15 +26,15 @@ MonoBehaviour:
         value: 0
         text: Reach the goal
       - type: 1
-        value: 3
-        text: Use maximum 3 code blocks
+        value: 1
+        text: Use max 1 code blocks
       - type: 2
         value: 15
         text: Finish under 15 seconds
     - scene: Mission 2
       title: Turn and Move
       description: Turn towards the flag and reach it.
-      video: {fileID: 0}
+      video: {fileID: 32900000, guid: 5cde2b8ad94b6fb4780fd504d32e2ebb, type: 3}
       maxRoverMass: 500
       starGoals:
       - type: 0

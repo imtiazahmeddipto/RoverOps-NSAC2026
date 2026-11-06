@@ -27,7 +27,7 @@ public class MissionHandler : MonoBehaviour
     [Min(0)] public int photosToSend = 0;              // photos WITH a PhotoTarget in them the lander must receive
     [Min(0)] public int samplesToCollect = 0;          // samples the rover must have in its sample box (0 = not needed)
 
-    bool NeedsFinish => finishBy == FinishBy.FinishLine || finishBy == FinishBy.Both;
+    public bool NeedsFinish => finishBy == FinishBy.FinishLine || finishBy == FinishBy.Both;
     bool NeedsData => finishBy == FinishBy.SendData || finishBy == FinishBy.Both;
     bool NeedsSamples => samplesToCollect > 0;
     bool HasGoal => NeedsFinish || NeedsData || NeedsSamples;
@@ -35,6 +35,14 @@ public class MissionHandler : MonoBehaviour
     [Header("Results Panel")]
     public GameObject resultsPanel;
     public Transform starGoals;
+
+    [Header("Space Points (SP) reward")]
+    public PartDatabase partDatabase;                  // the garage shop's database: SP go to the same balance it spends
+    [Min(0)] public int spPerStarGoal = 100;           // SP for each star goal, paid once per goal
+    public TMP_Text totalSPText;                       // SP earned this time (e.g. Result Panel/Image/Total/SP Point Total)
+    public string spTextName = "SP Point";             // the SP text inside each StarGoal row
+
+    enum Reward { None, Earned, AlreadyEarned }
 
     [Header("Star Icons")]
     public Sprite starEmpty;
@@ -218,13 +226,40 @@ public class MissionHandler : MonoBehaviour
 
         MissionDatabase.SetDone(scene);
 
+        var rewards = new Reward[mission.starGoals.Length];
+        int newSP = 0;
+        bool unpaid = false;
+
         for (int i = 0; i < mission.starGoals.Length; i++)
         {
-            if (Passed(mission.starGoals[i]))
+            bool passed = Passed(mission.starGoals[i]);
+            if (passed)
                 MissionDatabase.EarnStar(scene, i);
+
+            if (MissionDatabase.HasStarReward(scene, i))
+            {
+                rewards[i] = Reward.AlreadyEarned;          // paid on an earlier run: never again
+            }
+            else if (passed && partDatabase != null)
+            {
+                MissionDatabase.SetStarReward(scene, i);    // marked first: a goal can never be paid twice
+                newSP += spPerStarGoal;
+                rewards[i] = Reward.Earned;
+            }
+            else if (passed)
+            {
+                unpaid = true;                              // no Part Database linked: pay it next time instead
+            }
         }
 
-        UpdateStarGoals();
+        if (newSP > 0)
+            partDatabase.AddSpacePoints(newSP);
+
+        if (unpaid)
+            Debug.LogWarning("[Mission] Star goals were passed but no Part Database is assigned: no SP awarded.", this);
+
+        UpdateStarGoals(rewards);
+        ShowTotalSP(newSP);
 
         if (resultsPanel != null)
             resultsPanel.SetActive(true);
@@ -234,7 +269,7 @@ public class MissionHandler : MonoBehaviour
     // STAR GOALS
     // --------------------------------------------------
 
-    void UpdateStarGoals()
+    void UpdateStarGoals(Reward[] rewards)
     {
         if (starGoals == null || mission == null)
         {
@@ -256,11 +291,17 @@ public class MissionHandler : MonoBehaviour
             StarGoal goal = mission.starGoals[i];
             bool passed = Passed(goal);
 
-            TMP_Text goalText =
-                row.GetComponentInChildren<TMP_Text>(true);
+            TMP_Text goalText = FindText(row, "txt");
+            if (goalText == null)
+            {
+                goalText = row.GetComponentInChildren<TMP_Text>(true);
+                if (goalText != null && goalText == FindText(row, spTextName)) goalText = null;   // never the SP text
+            }
 
             if (goalText != null)
                 goalText.text = goal.Text;
+
+            ShowReward(row, rewards != null && i < rewards.Length ? rewards[i] : Reward.None);
 
             Image star = row.GetComponentInChildren<Image>(true);
 
@@ -286,6 +327,43 @@ public class MissionHandler : MonoBehaviour
                 mission.starGoals.Length +
                 ", Available: " + starGoals.childCount, this);
         }
+    }
+
+    // --------------------------------------------------
+    // SPACE POINTS
+    // --------------------------------------------------
+
+    // The row's SP Point text: "+100" when paid this run, "+0" when paid on an earlier run, "0" when not earned
+    void ShowReward(Transform row, Reward reward)
+    {
+        TMP_Text sp = FindText(row, spTextName);
+        if (sp == null) return;
+
+        sp.text = reward == Reward.Earned ? "+" + spPerStarGoal.ToString("N0")
+                : reward == Reward.AlreadyEarned ? "+0"
+                : "0";
+    }
+
+    // Total SP this run added to the balance
+    void ShowTotalSP(int newSP)
+    {
+        TMP_Text total = totalSPText;
+        if (total == null && resultsPanel != null)
+            total = FindText(resultsPanel.transform, spTextName + " Total");
+
+        if (total != null)
+            total.text = newSP > 0 ? "+" + newSP.ToString("N0") : "0";
+    }
+
+    // A text under 'root' by name (spaces and capitals don't matter), also on inactive objects
+    static TMP_Text FindText(Transform root, string name)
+    {
+        if (root == null || string.IsNullOrWhiteSpace(name)) return null;
+        string want = name.Trim();
+        foreach (TMP_Text text in root.GetComponentsInChildren<TMP_Text>(true))
+            if (string.Equals(text.name.Trim(), want, System.StringComparison.OrdinalIgnoreCase))
+                return text;
+        return null;
     }
 
     bool Passed(StarGoal goal)

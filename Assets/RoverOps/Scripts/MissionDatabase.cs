@@ -124,6 +124,15 @@ public class MissionDatabase : ScriptableObject
         PlayerPrefs.Save();
     }
 
+    // Space Points paid for a star goal: once per goal, ever (replays never pay it again)
+    public static bool HasStarReward(string scene, int goal) => PlayerPrefs.GetInt(Key(scene) + ".StarReward" + goal, 0) == 1;
+
+    public static void SetStarReward(string scene, int goal)
+    {
+        PlayerPrefs.SetInt(Key(scene) + ".StarReward" + goal, 1);
+        PlayerPrefs.Save();
+    }
+
     public static int Stars(MissionData mission)
     {
         int count = 0;

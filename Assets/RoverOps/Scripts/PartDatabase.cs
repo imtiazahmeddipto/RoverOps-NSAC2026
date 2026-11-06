@@ -50,6 +50,15 @@ public class PartDatabase : ScriptableObject
         }
     }
 
+    // Mission rewards go into the same Space Points the garage shop spends (saved in PlayerPrefs)
+    public void AddSpacePoints(int amount)
+    {
+        if (amount <= 0) return;
+        InitializeSpacePoints();                            // a first-time player keeps the starting balance
+        PlayerPrefs.SetInt(SpacePointsKey, PlayerPrefs.GetInt(SpacePointsKey, 0) + amount);
+        PlayerPrefs.Save();
+    }
+
     public void InitializeSpacePoints()
     {
         if (!PlayerPrefs.HasKey(SpacePointsKey))

@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: RoverOps_Finish Line Decal
+  m_Shader: {fileID: 4800000, guid: b69f6694aaedcfa429351eef97f9961f, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords:
+  - _CHECKER_ON
+  - _LIT_ON
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _AngleFade: 0.4
+    - _Checker: 1
+    - _CheckerCount: 24
+    - _CheckerRows: 2
+    - _EdgeRoughness: 0.02
+    - _EdgeSoftness: 0.015
+    - _FillCenter: 0.15
+    - _HeightFade: 0.3
+    - _Lit: 1
+    - _NoiseScale: 12
+    - _Opacity: 0.9
+    - _PulseAmount: 0.3
+    - _PulseSpeed: 0
+    - _RingInner: 0.75
+    - _RingOuter: 0.95
+    - _Wear: 0.2
+    m_Colors:
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _Color2: {r: 0.05, g: 0.05, b: 0.05, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

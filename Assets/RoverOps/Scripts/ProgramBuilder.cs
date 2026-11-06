@@ -34,6 +34,12 @@ public class ProgramBuilder : MonoBehaviour
     [Header("Solution (this mission)")]
     public List<SolutionStep> solution = new List<SolutionStep>();
 
+    [Header("Equipment Needed (this mission)")]
+    [Tooltip("Parts the rover must have for this solution. Missing ones show as a warning in the Rover Status.")]
+    [UnityEngine.Serialization.FormerlySerializedAs("toolsNeeded")]
+    [PartName] public List<string> equipmentNeeded = new List<string>();
+    public PartDatabase partDatabase;       // optional: found from the rover's RoverLoadout if empty
+
     [Header("Look")]
     [Min(0f)] public float stepDelay = 0.15f;   // seconds between blocks (0 = all at once)
 
@@ -96,10 +102,14 @@ public class ProgramBuilder : MonoBehaviour
 
             Refresh(null);
             if (editorView != null) editorView.ScrollToTop();      // done: back to the first block
-            Tell(warnings == 0
+            string done = warnings == 0
                 ? "<color=#7CFC7C>AI built the program (" + placed + " blocks). Press RUN.</color>"
                 : "<color=#FFC63A>AI built the program with " + warnings + (warnings == 1 ? " problem" : " problems")
-                  + " (see the Console). Press RUN.</color>");
+                  + " (see the Console). Press RUN.</color>";
+            string missing = MissingEquipment();
+            if (missing != null)
+                done += "\n<color=#FFC63A>" + missing + " needed to complete this mission.</color>";
+            Tell(done);
         }
         finally
         {
@@ -197,6 +207,43 @@ public class ProgramBuilder : MonoBehaviour
             if (block != null && block.type == Block.Start) return true;
         }
         return false;
+    }
+
+    // ---------------- EQUIPMENT NEEDED ----------------
+    // "HD Cam, Drill 2" for the needed parts that are NOT on the rover; null if nothing is missing
+    string MissingEquipment()
+    {
+        if (equipmentNeeded == null || equipmentNeeded.Count == 0) return null;
+
+        if (partDatabase == null)
+        {
+            RoverLoadout loadout = rover != null ? rover.GetComponentInParent<RoverLoadout>() : null;
+            if (loadout == null) loadout = FindAnyObjectByType<RoverLoadout>();
+            if (loadout != null) partDatabase = loadout.database;
+        }
+
+        var fitted = new HashSet<string>();
+        if (partDatabase != null)
+            foreach (PartType type in System.Enum.GetValues(typeof(PartType)))
+            {
+                PartData part = partDatabase.Equipped(type);
+                if (part != null) fitted.Add(part.name.Trim().ToLowerInvariant());
+            }
+
+        var missing = new List<string>();
+        foreach (string entry in equipmentNeeded)
+        {
+            if (string.IsNullOrWhiteSpace(entry)) continue;
+            bool ok;
+            if (PartNameAttribute.IsAny(entry, out PartType type))         // "Any Camera": any real part of that type
+                ok = partDatabase != null && !PartNameAttribute.IsNothing(partDatabase.Equipped(type));
+            else                                                            // one exact part
+                ok = fitted.Contains(entry.Trim().ToLowerInvariant());
+
+            string name = PartNameAttribute.Show(entry.Trim());
+            if (!ok && !missing.Contains(name)) missing.Add(name);
+        }
+        return missing.Count > 0 ? string.Join(", ", missing) : null;
     }
 
     // ---------------- CHECK THE SOLUTION ----------------

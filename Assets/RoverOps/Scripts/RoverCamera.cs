@@ -90,6 +90,7 @@ public class RoverCamera : MonoBehaviour
     public int SamplesInView { get; private set; }
 
     bool roverView;
+    public Camera ActiveCamera => roverView ? onboardCamera : followCamera;   // the camera shown in the Mission Viewer
 
     public bool IsRock(Collider c)
     {

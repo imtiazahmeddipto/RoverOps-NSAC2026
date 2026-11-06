@@ -24,11 +24,39 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
     public TMP_InputField valueInput;   // optional number slot
     public RectTransform programArea;   // the Code Editor's block list (zooms and moves)
     public RectTransform dropArea;      // the Code Editor's visible frame: drop blocks here
+    public float wideSelectorWidth = 190f;  // selector chip width when the option has no comparison (no < > = and number)
 
     static readonly string[] Signs = { "<", ">", "=" };
     RectTransform dragged;
     int optionIndex = -1;               // the option the selector shows, by POSITION (duplicate names can't trap the cycle)
     static readonly System.Collections.Generic.HashSet<string> warned = new System.Collections.Generic.HashSet<string>();
+    [SerializeField, HideInInspector] float normalSelectorWidth = -1f;   // saved in Awake; copies of this block keep it
+
+    void Awake()
+    {
+        RectTransform chip = SelectorChip;
+        if (chip != null && normalSelectorWidth < 0f) normalSelectorWidth = chip.rect.width;
+    }
+
+    // The selector's chip (its button), or the text itself if it has no button
+    RectTransform SelectorChip
+    {
+        get
+        {
+            if (selector == null) return null;
+            Button b = selector.GetComponentInParent<Button>();
+            return b != null ? (RectTransform)b.transform : selector.rectTransform;
+        }
+    }
+
+    void SetSelectorWidth(float width)
+    {
+        RectTransform chip = SelectorChip;
+        if (chip == null || width < 0f) return;
+        chip.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+        LayoutElement le = chip.GetComponent<LayoutElement>();      // if a layout group sizes the chip
+        if (le != null) le.preferredWidth = width;
+    }
 
     public string Selected => selector != null ? selector.text : "";
     public string Sign => compare != null ? compare.text : "<";
@@ -138,6 +166,8 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
         if (valueInput != null)
             valueInput.gameObject.SetActive(show);
+
+        SetSelectorWidth(show ? normalSelectorWidth : wideSelectorWidth);   // no comparison = wider chip
     }
 
     static void Cycle(TMP_Text chip, string[] list)
@@ -151,6 +181,7 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
     public void OnBeginDrag(PointerEventData e)
     {
         if (Rover.IsRunning || ProgramBuilder.IsBuilding) return;
+        if (type == Block.Start) return;                // "When mission starts" is fixed at the top
         Transform canvas = GetComponentInParent<Canvas>().rootCanvas.transform;
 
         // from the Code Editor: move this block. From the Blocks panel: drag a new copy.
@@ -178,6 +209,8 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
             int index = programArea.childCount;
             for (int i = 0; i < programArea.childCount; i++)
                 if (e.position.y > programArea.GetChild(i).position.y) { index = i; break; }
+            if (programArea.childCount > 0 && programArea.GetChild(0).GetComponent<CodeBlock>().type == Block.Start)
+                index = Mathf.Max(index, 1);            // never above "When mission starts"
             dragged.SetParent(programArea, false);
             dragged.localScale = Vector3.one;
             dragged.SetSiblingIndex(index);

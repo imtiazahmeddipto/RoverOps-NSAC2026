@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 // The Code Editor's view: mouse wheel (or the - / + buttons) zooms, dragging empty space moves the program.
 // Blocks never leave the frame: the view clips them (RectMask2D) and panning stops at the edges.
@@ -11,10 +12,12 @@ public class CodeEditorView : MonoBehaviour, IScrollHandler, IBeginDragHandler, 
     public float minZoom = 0.5f, maxZoom = 1.6f, step = 0.1f;
 
     RectTransform view;
+    LayoutGroup layout;                 // the block list's layout group: its Left / Right padding is kept
 
     void Awake()
     {
         view = (RectTransform)transform;
+        if (content != null) layout = content.GetComponent<LayoutGroup>();
         UpdateLabel();
     }
 
@@ -103,7 +106,7 @@ public class CodeEditorView : MonoBehaviour, IScrollHandler, IBeginDragHandler, 
     // Keep the program inside the frame: it can only move when it's bigger than the view.
     // Sideways it uses the BLOCKS' width (with indents), measured in the frame's own space, so it works however
     // the program is anchored or zoomed. Blocks that fit stay left-aligned; wider ones pan between both edges.
-    public float sideMargin = 24f;      // space kept between the blocks and the frame's sides
+    public float sideMargin = 24f;      // space kept between the blocks and the frame's sides (used when the list has no Layout Group)
 
     void Clamp()
     {
@@ -113,7 +116,10 @@ public class CodeEditorView : MonoBehaviour, IScrollHandler, IBeginDragHandler, 
 
         if (BlocksInView(out float left, out float right))      // the blocks' edges, in the frame's units
         {
-            float leftLimit = frame.xMin + sideMargin, rightLimit = frame.xMax - sideMargin;
+            // Use the Layout Group's padding (it grows with zoom, like the blocks); no Layout Group = sideMargin
+            float leftPad = layout != null ? layout.padding.left * zoom : sideMargin;
+            float rightPad = layout != null ? layout.padding.right * zoom : sideMargin;
+            float leftLimit = frame.xMin + leftPad, rightLimit = frame.xMax - rightPad;
             float shift = right - left <= rightLimit - leftLimit
                 ? leftLimit - left                                          // fits: left-aligned
                 : Mathf.Clamp(0f, rightLimit - right, leftLimit - left);    // wider: never past either edge
