@@ -54,6 +54,12 @@ public class Rover : MonoBehaviour
     public float drillReach = 1f;       // a sample must be closer than this to the nose (m)
     public float areaSize = 58f;        // leaving the test area also ends the run (m)
 
+    [Header("Slopes")]
+    public float grip = 1f;             // set by the Wheels part (its Grip stat)
+    public float slopePerGrip = 20f;    // degrees the rover can climb per point of grip (grip 1 = 20°, 1.5 = 30°)
+    public float slopeProbe = 0.6f;     // the slope is measured from this far behind to this far ahead of the rover (m)
+    public float MaxSlope => slopePerGrip * grip;
+
     [Header("Power (set by the Battery and Solar parts)")]
     public float batteryCapacity = 100f;// energy the battery holds
     public float chargeRate = 0.5f;     // energy the solar panel adds per second
@@ -112,7 +118,19 @@ public class Rover : MonoBehaviour
     public float RunTime => runTime;
     int blockCount;
     public int BlockCount => blockCount;        // blocks in the last program (not counting "When mission starts")
+    readonly HashSet<Block> usedBlocks = new HashSet<Block>();
+    public bool UsedBlock(Block b) => usedBlocks.Contains(b);   // was this block in the last program?
     public int Samples => samples;
+    int targetSamples;
+    public int TargetSamplesCollected => targetSamples;          // only samples with a SampleTarget
+
+    // Collected already this run? (the target indicator skips these)
+    public bool IsCollected(SampleTarget t)
+    {
+        foreach (GameObject go in collected)
+            if (go != null && (go.transform.IsChildOf(t.transform) || t.transform.IsChildOf(go.transform))) return true;
+        return false;
+    }
     public void EndMission(string text) => StopProgram(text);   // the MissionHandler stops the run at the finish line
     readonly List<GameObject> collected = new List<GameObject>();
 
@@ -124,6 +142,19 @@ public class Rover : MonoBehaviour
     int analysesSent, photosSent, wrongPhotos, wrongAnalyses;
     public int AnalysesSent => analysesSent;     // the MissionHandler checks these
     public int PhotosSent => photosSent;         // only data of TARGETS counts
+    int rocksAnalyzed, targetRocksAnalyzed;
+    readonly HashSet<PhotoTarget> photographed = new HashSet<PhotoTarget>();
+
+    // Done already this run? (the target indicator skips these)
+    public bool IsPhotographed(PhotoTarget t) => photographed.Contains(t);
+    public bool IsAnalyzed(AnalysisTarget t)
+    {
+        foreach (Collider c in t.GetComponentsInChildren<Collider>())
+            if (analyzedRocks.Contains(c)) return true;
+        return false;
+    }
+    public int RocksAnalyzed => rocksAnalyzed;               // every rock analyzed this run
+    public int TargetRocksAnalyzed => targetRocksAnalyzed;   // only rocks with an AnalysisTarget
     int DataWaiting => waitingAnalyses.Count + waitingPhotos.Count;
     Coroutine previewRoutine;                    // the photo preview's show-then-fade (UI only, not part of the program)
 
@@ -142,6 +173,13 @@ public class Rover : MonoBehaviour
     float turnLeft;                     // degrees still to turn (0 = no turn)
     float turnDir = 1f;                 // +1 right, -1 left
     bool Turning => turnLeft > 0f;
+
+    // ---------------- FOR SOUNDS (GameAudio reads these) ----------------
+    public bool IsDriving => !crashed && (speed > 0.01f || Turning);   // wheels turning: driving or turning on the spot
+    public float SpeedPercent => topSpeed > 0f ? Mathf.Clamp01(speed / topSpeed) : 0f;
+    public bool IsDrilling { get; private set; }                        // the drill bit is spinning (collect / analyze)
+    public bool IsCharging => recharging;                              // battery ran empty: the solar panel is refilling it
+    static void Sound(GameAudio.Sfx sfx) => GameAudio.Play(sfx);
     bool InMotion => Moving || Turning;
     float MassFactor => mass / 300f;
 
@@ -164,13 +202,15 @@ public class Rover : MonoBehaviour
         Say("Build your program, then press RUN");
     }
 
-    // Run speed: 1x / 2x / 3x, used only while a program runs (editing, results and menus stay at 1x).
+    // Run speed: 1x / 2x / 3x / 5x / 10x, used only while a program runs (editing, results and menus stay at 1x).
     // Game time speeds up too, so time star goals are measured the same at any speed.
-    int runSpeed = 1;
+    static readonly int[] RunSpeeds = { 1, 2, 3, 5, 10 };
+    int speedIndex;
+    int runSpeed => RunSpeeds[speedIndex];
 
     public void CycleSpeed()            // the speed button's OnClick
     {
-        runSpeed = runSpeed % 3 + 1;
+        speedIndex = (speedIndex + 1) % RunSpeeds.Length;
         if (speedLabel) speedLabel.text = "SPEED " + runSpeed + "x";
     }
 
@@ -181,7 +221,14 @@ public class Rover : MonoBehaviour
         ShowStatus();                   // live telemetry
     }
 
-    void OnDisable() => Time.timeScale = 1f;   // leaving the scene: back to normal
+    public static Rover Current { get; private set; }   // the rover in this scene (GameAudio plays its loops)
+    void OnEnable() => Current = this;
+
+    void OnDisable()
+    {
+        Time.timeScale = 1f;                        // leaving the scene: back to normal
+        if (Current == this) Current = null;
+    }
 
     // While a program runs, the Code Editor keeps the running block fully inside its frame
     // (the highlight draws it on top, outside the frame's clipping, so it must never sit across the edge)
@@ -247,6 +294,7 @@ public class Rover : MonoBehaviour
         if (Moving) step = Mathf.Min(step, stopAt - odometer);
         Vector3 next = flatPos + Facing * Vector3.forward * (step * moveDir);
         if (Mathf.Abs(next.x) > areaSize / 2f || Mathf.Abs(next.z) > areaSize / 2f) { Crash("The rover drove out of the test area!"); return; }
+        if (SlopeAhead(out float slope) && slope > MaxSlope) { Slip(slope); return; }      // too steep for these wheels
 
         flatPos = next;
         SpinWheels(step * moveDir, 0f);
@@ -295,10 +343,23 @@ public class Rover : MonoBehaviour
         energy -= heavierUsesMore ? amount * MassFactor : amount;
         if (energy > 0f) return;
         energy = 0f;
-        recharging = true;
         speed = 0f;
+        if (IsRunning) Sound(GameAudio.Sfx.BatteryEmpty);
+        if (!HasSolar)                  // nothing can refill it: the run is over
+        {
+            if (IsRunning)
+            {
+                crashed = true;         // the rover can't move any more (Restart clears it)
+                StopProgram("<color=#FF6B6B>BATTERY EMPTY! No solar panel is fitted, so the battery can't recharge. "
+                            + "Fit a solar panel or a bigger battery, or use less power.\nPress RUN to try again.</color>");
+            }
+            return;
+        }
+        recharging = true;
         Say("<color=#FFC63A>Battery empty! Waiting for the solar panel to recharge it...</color>");
     }
+
+    bool HasSolar => chargeRate > 0f;   // "No Solar" sets the charge rate to 0
 
     // Full battery (back at the start, or new parts fitted in the garage)
     public void Refill()
@@ -307,8 +368,52 @@ public class Rover : MonoBehaviour
         recharging = false;
     }
 
+    // ---------------- SLOPES ----------------
+    // The ground's angle in the driving direction (uphill = +), measured under the rover. False = no ground found.
+    readonly RaycastHit[] groundHits = new RaycastHit[16];
+
+    bool SlopeAhead(out float degrees)
+    {
+        degrees = 0f;
+        Vector3 dir = Facing * Vector3.forward * moveDir;
+        Vector3 center = new Vector3(flatPos.x, transform.position.y, flatPos.z);
+        if (!GroundHeight(center - dir * slopeProbe, out float behind)) return false;
+        if (!GroundHeight(center + dir * slopeProbe, out float ahead)) return false;
+        degrees = Mathf.Atan2(ahead - behind, 2f * slopeProbe) * Mathf.Rad2Deg;
+        return true;
+    }
+
+    // Height of the ground (not rocks, samples, the lander or the rover) at this spot
+    bool GroundHeight(Vector3 at, out float height)
+    {
+        height = 0f;
+        int mask = suspension != null ? suspension.groundLayers.value : ~0;
+        mask &= ~(cam.rockLayer.value | cam.sampleLayer.value | cam.landerLayer.value);
+        int count = Physics.RaycastNonAlloc(at + Vector3.up * 5f, Vector3.down, groundHits, 20f, mask, QueryTriggerInteraction.Ignore);
+        bool found = false;
+        for (int i = 0; i < count; i++)
+        {
+            if (groundHits[i].collider.transform.IsChildOf(transform)) continue;
+            if (!found || groundHits[i].point.y > height) { height = groundHits[i].point.y; found = true; }
+        }
+        return found;
+    }
+
+    // Too steep: the wheels spin, the rover can't go on
+    void Slip(float slope)
+    {
+        Sound(GameAudio.Sfx.WheelSlip);
+        crashed = true;
+        speed = 0f;
+        string text = "WHEELS SLIPPING! The slope is " + slope.ToString("0") + "°, these wheels can climb only "
+                    + MaxSlope.ToString("0") + "°. Fit wheels with more grip or find another way.";
+        StopProgram("<color=#FF6B6B>" + text + "\nPress RUN to try again.</color>");
+        Debug.LogWarning("[Rover] " + text);
+    }
+
     void Crash(string text)
     {
+        Sound(GameAudio.Sfx.Crash);
         crashed = true;
         speed = 0f;
         StopProgram("<color=#FF6B6B>ROVER CRASHED. " + text + "\nPress RUN to try again.</color>");
@@ -328,7 +433,7 @@ public class Rover : MonoBehaviour
         }
         var all = new List<CodeBlock>(programArea.GetComponentsInChildren<CodeBlock>());
         int start = all.FindIndex(b => b.type == Block.Start);
-        if (start < 0) { Say("Add a 'When mission starts' block first"); return; }
+        if (start < 0) { Say("Add a 'When mission starts' block first"); Sound(GameAudio.Sfx.ProgramError); return; }
         List<CodeBlock> script = all.GetRange(start + 1, all.Count - start - 1);
 
         MarkError(null);
@@ -338,17 +443,21 @@ public class Rover : MonoBehaviour
         {
             MarkError(bad);
             Say("<color=#FF6B6B>Can't run: " + problem + " (marked in red)</color>");
+            Sound(GameAudio.Sfx.ProgramError);
             return;
         }
 
         Restart();                                  // every run starts fresh: back at the start, full battery, samples back
         blockCount = script.Count;
+        usedBlocks.Clear();
+        foreach (CodeBlock b in script) usedBlocks.Add(b.type);
         runStart = Time.time;
         runTime = 0f;
         failed = false;
         IsRunning = true;
         SetRunLabel();
         program = StartCoroutine(RunMain(script));
+        Sound(GameAudio.Sfx.RunStart);
     }
 
     public void Restart()
@@ -362,6 +471,7 @@ public class Rover : MonoBehaviour
         foreach (GameObject sample in collected) sample.SetActive(true);
         collected.Clear();
         samples = 0;
+        targetSamples = 0;
         ClearData();
         Refill();
         if (drillArm) drillArm.ResetPose();
@@ -384,6 +494,7 @@ public class Rover : MonoBehaviour
 
     void EndProgram(string text)
     {
+        IsDrilling = false;             // a stopped program can't leave the drill sound on
         if (IsRunning) runTime = Time.time - runStart;   // freeze the exact time the run ended
         stopAt = -1f;                   // the rover brakes to a stop by itself
         turnLeft = 0f;                  // and stops turning at once
@@ -510,6 +621,7 @@ public class Rover : MonoBehaviour
             if (failed)
             {
                 EndProgram("<color=#FF6B6B>" + message + "\nFix it, then press RUN.</color>");
+                Sound(GameAudio.Sfx.ProgramError);
                 yield break;
             }
             yield return null;          // every block takes at least one frame (keeps loops safe)
@@ -622,7 +734,12 @@ public class Rover : MonoBehaviour
         if (freshScan)
             cam.Scan();
 
-        Read(block.Selected, out float left);
+        if (!Read(block.Selected, out float left))              // a chip name that isn't a reading (e.g. a typo in its Options)
+        {
+            Fail("ERROR: '" + block.Selected.Trim() + "' is not a reading. Check this block's Options name in the Inspector.");
+            text = block.Selected.Trim() + ": unknown reading";
+            return false;
+        }
 
         // Yes / no conditions: rock detected, sample detected, lander detected
         if (Key(block.Selected).EndsWith("detected"))
@@ -701,6 +818,9 @@ public class Rover : MonoBehaviour
             case "battery": value = BatteryPercent; return true;
             case "sampledetected": value = float.IsInfinity(cam.SampleDistance) ? 0f : 1f;
                 return true;
+            case "finishdist":                                   // metres to the finish zone (0 = inside), none = no finish line
+                value = MissionHandler.Current != null ? MissionHandler.Current.FinishLineDistance : Mathf.Infinity;
+                return true;
         }
         value = 0f;
         return false;
@@ -713,7 +833,7 @@ public class Rover : MonoBehaviour
         if (text == "") return defaultValue;
         if (float.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float v)) return v;
         if (Read(text, out v)) return v;
-        Fail("ERROR: '" + text + "' is not a number or a reading. Use a number, rock dist, rock angle, rock size (HD Cam), sample dist, sample size (HD Cam), sample angle, samples, battery, lander dist, lander angle or data.");
+        Fail("ERROR: '" + text + "' is not a number or a reading. Use a number, rock dist, rock angle, rock size (HD Cam), sample dist, sample size (HD Cam), sample angle, samples, battery, lander dist, lander angle, finish dist or data.");
         return defaultValue;
     }
 
@@ -775,6 +895,7 @@ public class Rover : MonoBehaviour
         }
         while (recharging || energy < drillEnergy * MassFactor)        // the drill needs power
         {
+            if (!HasSolar) { yield return Problem("not enough power to drill, and no solar panel to recharge the battery. Fit a solar panel or a bigger battery."); yield break; }
             message = "<color=#FFC63A>Not enough power to drill: waiting for the solar panel...</color>";
             yield return null;
         }
@@ -785,16 +906,27 @@ public class Rover : MonoBehaviour
             yield return drillArm.Reach(sample.bounds.center);       // arm out to the sample
         }
         float time = 3f / drillSpeed;
+        IsDrilling = true;
         for (float t = 0f; t < time; t += Time.deltaTime)
         {
             message = "Drilling... " + Mathf.RoundToInt(t / time * 100f) + "%";
             yield return null;
         }
+        IsDrilling = false;
+        SampleTarget target = sample.GetComponentInParent<SampleTarget>();   // before it is switched off
         sample.gameObject.SetActive(false);
         collected.Add(sample.gameObject);
         samples++;
+        if (target != null) targetSamples++;
+        Sound(GameAudio.Sfx.SampleCollected);
         if (drillArm) yield return drillArm.Fold();                  // arm back
-        Say("Sample collected! (" + samples + " / " + sampleCapacity + " in the sample box)");
+
+        if (SampleTarget.Count > 0 && target == null && MissionHandler.Current != null && MissionHandler.Current.EndsBySampleTargets)
+            Fail("WRONG SAMPLE COLLECTED! This is not a target sample. Collect the target samples.");   // the program stops
+        else if (target != null)
+            Say("Target sample collected: " + target.targetName + "! (" + samples + " / " + sampleCapacity + " in the sample box)");
+        else
+            Say("Sample collected! (" + samples + " / " + sampleCapacity + " in the sample box)");
     }
 
     // ---------------- SCIENCE ----------------
@@ -814,6 +946,7 @@ public class Rover : MonoBehaviour
 
         while (recharging || energy < analyzeEnergy * MassFactor)    // the drill needs power
         {
+            if (!HasSolar) { yield return Problem("not enough power to analyze, and no solar panel to recharge the battery. Fit a solar panel or a bigger battery."); yield break; }
             message = "<color=#FFC63A>Not enough power to analyze: waiting for the solar panel...</color>";
             yield return null;
         }
@@ -824,19 +957,35 @@ public class Rover : MonoBehaviour
             yield return drillArm.Reach(rock.bounds.center);
         }
         float time = 3f / drillSpeed;
+        IsDrilling = true;
         for (float t = 0f; t < time; t += Time.deltaTime)
         {
             message = "Analyzing rock... " + Mathf.RoundToInt(t / time * 100f) + "%";
             yield return null;
         }
+        IsDrilling = false;
         analyzedRocks.Add(rock);
-        waitingAnalyses.Add(rock.GetComponentInParent<AnalysisTarget>());   // checked when the data reaches the lander
+        AnalysisTarget target = rock.GetComponentInParent<AnalysisTarget>();
+        waitingAnalyses.Add(target);                     // checked when the data reaches the lander
+        rocksAnalyzed++;
+        if (target != null) targetRocksAnalyzed++;
+        Sound(GameAudio.Sfx.RockAnalyzed);
         if (drillArm)
         {
             message = "Folding the drill arm...";
             yield return drillArm.Fold();
         }
-        Say("Rock analyzed! (" + DataWaiting + " waiting to send to the lander)");
+        if (AnalysisTarget.Count > 0 && target == null)      // the scene has target rocks, and this isn't one
+        {
+            if (MissionHandler.Current != null && MissionHandler.Current.EndsByAnalysis)
+                Fail("WRONG ROCK ANALYZED! This is not the target rock. Analyze the target rock.");   // the program stops
+            else
+                Say("<color=#FFC63A>Rock analyzed, but it is not a target rock.</color> (" + DataWaiting + " waiting to send to the lander)");
+        }
+        else if (target != null)
+            Say("Target rock analyzed: " + target.targetName + "! (" + DataWaiting + " waiting to send to the lander)");
+        else
+            Say("Rock analyzed! (" + DataWaiting + " waiting to send to the lander)");
     }
 
     // Stop, take a picture with the onboard camera and keep it until Send Data
@@ -852,6 +1001,7 @@ public class Rover : MonoBehaviour
         yield return BrakeToStop();                      // stand still for a sharp photo
         while (recharging || energy < photoEnergy)       // the camera doesn't care about mass
         {
+            if (!HasSolar) { yield return Problem("not enough power for a photo, and no solar panel to recharge the battery. Fit a solar panel or a bigger battery."); yield break; }
             message = "<color=#FFC63A>Not enough power for a photo: waiting for the solar panel...</color>";
             yield return null;
         }
@@ -868,8 +1018,10 @@ public class Rover : MonoBehaviour
         {
             photos.Add(photo);
             ShowPreview(photo);
+            Sound(GameAudio.Sfx.Photo);
         }
         waitingPhotos.Add(target);
+        if (target != null) photographed.Add(target);
         Say("Photo " + (waitingPhotos.Count + photosSent + wrongPhotos) + " taken: " + rocks + (rocks == 1 ? " rock, " : " rocks, ")
             + found + (found == 1 ? " sample" : " samples") + " in view (" + DataWaiting + " waiting to send)");
     }
@@ -895,10 +1047,12 @@ public class Rover : MonoBehaviour
             bool photo = waitingAnalyses.Count == 0;     // analyses first (small), then photos
             while (recharging || energy < sendEnergy)    // the radio doesn't care about mass
             {
+                if (!HasSolar) { yield return Problem("not enough power to send, and no solar panel to recharge the battery. Fit a solar panel or a bigger battery."); yield break; }
                 message = "<color=#FFC63A>Not enough power to send: waiting for the solar panel...</color>";
                 yield return null;
             }
             float time = sendTime * (photo ? 2f : 1f);
+            Sound(GameAudio.Sfx.SendData);             // one data burst per analysis / photo
             for (float t = 0f; t < time; t += Time.deltaTime)
             {
                 message = "Sending " + (photo ? "photo" : "rock analysis") + " to the lander... "
@@ -910,11 +1064,11 @@ public class Rover : MonoBehaviour
             {
                 PhotoTarget target = waitingPhotos[0];
                 waitingPhotos.RemoveAt(0);
-                if (target != null)                      // the lander checks the photo: is the target in it?
+                if (target != null || PhotoTarget.Count == 0)   // the lander checks the photo: is the target in it? (no targets in the scene = any photo)
                 {
                     photosSent++;
                     sentPhotos++;
-                    if (!targets.Contains(target.targetName)) targets.Add(target.targetName);
+                    if (target != null && !targets.Contains(target.targetName)) targets.Add(target.targetName);
                 }
                 else
                 {
@@ -926,11 +1080,11 @@ public class Rover : MonoBehaviour
             {
                 AnalysisTarget target = waitingAnalyses[0];
                 waitingAnalyses.RemoveAt(0);
-                if (target != null)                      // the lander checks the analysis: was it the target rock?
+                if (target != null || AnalysisTarget.Count == 0)   // the lander checks the analysis: was it the target rock? (no targets in the scene = any rock)
                 {
                     analysesSent++;
                     sentAnalyses++;
-                    if (!targets.Contains(target.targetName)) targets.Add(target.targetName);
+                    if (target != null && !targets.Contains(target.targetName)) targets.Add(target.targetName);
                 }
                 else
                 {
@@ -993,6 +1147,8 @@ public class Rover : MonoBehaviour
         waitingPhotos.Clear();
         waitingAnalyses.Clear();
         analysesSent = photosSent = wrongPhotos = wrongAnalyses = 0;
+        rocksAnalyzed = targetRocksAnalyzed = 0;
+        photographed.Clear();
         HidePreview();
     }
 

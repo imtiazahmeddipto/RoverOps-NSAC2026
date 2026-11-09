@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // Marks the rock or sample a mission wants a photo of.
@@ -7,6 +8,13 @@ using UnityEngine;
 public class PhotoTarget : MonoBehaviour
 {
     public string targetName = "Target";        // shown in the status, e.g. "Red Rock"
+
+    static readonly List<PhotoTarget> all = new List<PhotoTarget>();
+    public static IReadOnlyList<PhotoTarget> All => all;        // every photo target in the scene
+    public static int Count => all.Count;                       // 0 = any photo counts
+
+    void OnEnable() { if (!all.Contains(this)) all.Add(this); }
+    void OnDisable() => all.Remove(this);
 
     void OnDrawGizmos()
     {

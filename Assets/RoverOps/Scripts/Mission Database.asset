@@ -19,152 +19,215 @@ MonoBehaviour:
     - scene: Mission 1
       title: Reach the Target
       description: Drive the rover to the marked location.
-      video: {fileID: 32900000, guid: 14ed641432c4b7e4a846a782ff508a68, type: 3}
       maxRoverMass: 500
       starGoals:
       - type: 0
         value: 0
+        block: 1
         text: Reach the goal
       - type: 1
         value: 1
+        block: 1
         text: Use max 1 code blocks
       - type: 2
         value: 15
+        block: 1
         text: Finish under 15 seconds
     - scene: Mission 2
       title: Turn and Move
       description: Turn towards the flag and reach it.
-      video: {fileID: 32900000, guid: 5cde2b8ad94b6fb4780fd504d32e2ebb, type: 3}
       maxRoverMass: 500
       starGoals:
       - type: 0
         value: 0
-        text: Reach the goal.
+        block: 1
+        text: Reach the goal
       - type: 1
         value: 2
+        block: 1
         text: Use maximum 2 code blocks
       - type: 2
         value: 30
+        block: 1
         text: Finish under 30 seconds
     - scene: Mission 3
-      title: Collect the Rock
-      description: Use camera readings to find and collect the rock.
-      video: {fileID: 0}
+      title: Analyze a Rock
+      description: Use camera readings to find and analyze a rock.
       maxRoverMass: 500
       starGoals:
       - type: 0
         value: 0
-        text: Collect the rock
-      - type: 1
-        value: 4
-        text: Use maximum 4 code blocks
+        block: 1
+        text: Analyze a rock
+      - type: 7
+        value: 0
+        block: 7
+        text: Use If code blocks
       - type: 2
-        value: 40
-        text: Finish under 40 seconds
+        value: 15
+        block: 1
+        text: Finish under 15 seconds
     - scene: Mission 4
       title: Small or Large?
-      description: Equip the HD Camera, identify the correct rock by size and collect
-        it.
-      video: {fileID: 0}
+      description: Equip the HD Camera, identify the correct sample by size (4) and
+        analyze it.
       maxRoverMass: 500
       starGoals:
       - type: 0
         value: 0
-        text: Collect the correct rock.
-      - type: 1
-        value: 5
-        text: Use maximum 5 code blocks
+        block: 1
+        text: Analyze the correct rock
+      - type: 7
+        value: 0
+        block: 11
+        text: Use While code block
       - type: 2
-        value: 45
-        text: Finish under 45 seconds
+        value: 20
+        block: 1
+        text: Finish under 20 seconds
+  - name: Sector 2
+    label: Tutorial
+    missions:
     - scene: Mission 5
       title: First Discovery
-      description: Analyse the rock and transmit the scientific data.
-      video: {fileID: 0}
+      description: Analyse any rock and transmit the scientific data.
       maxRoverMass: 500
       starGoals:
-      - type: 0
+      - type: 5
+        value: 1
+        block: 1
+        text: Transmit scientific data
+      - type: 7
         value: 0
-        text: Transmit the scientific data
-      - type: 1
-        value: 5
-        text: Use maximum 5 code blocks
+        block: 12
+        text: Use Repeat Forever code block
       - type: 2
-        value: 45
-        text: Finish under 45 seconds
+        value: 55
+        block: 1
+        text: Finish under 55 seconds
     - scene: Mission 6
       title: Capture the Moment
       description: Photograph the rock, return to the lander and send the data.
-      video: {fileID: 0}
       maxRoverMass: 500
       starGoals:
       - type: 0
         value: 0
-        text: Send the correct photograph.
-      - type: 1
-        value: 5
-        text: Use maximum 5 code blocks
-      - type: 2
-        value: 60
-        text: Finish under 60 seconds
+        block: 1
+        text: Send the correct photograph
+      - type: 7
+        value: 0
+        block: 11
+        text: Use While code block
+      - type: 7
+        value: 0
+        block: 12
+        text: Use Repeat Forever code block
     - scene: Mission 7
-      title: Running Out of Power
-      description: Equip a suitable solar panel and recharge the rover before continuing.
-      video: {fileID: 0}
+      title: Power & Traction Test
+      description: Equip suitable wheels and a solar panel. Navigate the terrain,
+        and reach the Lander.
       maxRoverMass: 500
       starGoals:
       - type: 0
         value: 0
-        text: Reach the goal
-      - type: 1
+        block: 1
+        text: Reach the Lander
+      - type: 7
         value: 5
-        text: Use maximum 5 code blocks
+        block: 6
+        text: Use Wait code blocks
       - type: 3
         value: 50
+        block: 1
         text: Reach with minimum 50% battery
     - scene: Mission 8
-      title: Wheel Test
-      description: Choose suitable rover wheels and complete the track.
-      video: {fileID: 0}
-      maxRoverMass: 500
-      starGoals:
-      - type: 0
-        value: 0
-        text: Reach the goal
-      - type: 2
-        value: 30
-        text: Finish under 30 seconds
-      - type: 3
-        value: 40
-        text: Reach with minimum 40% battery
-    - scene: Mission 9
       title: Sample Collector
       description: Choose a suitable drill, collect three samples and store them.
-      video: {fileID: 0}
       maxRoverMass: 500
       starGoals:
       - type: 0
         value: 0
-        text: Reach the goal
-      - type: 4
-        value: 3
-        text: Collect three samples
-      - type: 1
-        value: 8
-        text: Use maximum 8 code blocks
-    - scene: Mission 10
-      title: Dangerous Ground
-      description: Use the HD Camera to detect dangerous terrain and navigate safely
-        around it.
-      video: {fileID: 0}
-      maxRoverMass: 500
-      starGoals:
-      - type: 0
+        block: 1
+        text: Collect all samples
+      - type: 7
         value: 0
-        text: Reach the goal
-      - type: 1
-        value: 8
-        text: Use maximum 8 code blocks
+        block: 11
+        text: Use While code block
       - type: 3
         value: 40
-        text: Reach with minimum 40% battery
+        block: 1
+        text: Finish with minimum 40% battery
+  - name: Sector 3
+    label: Real Life Events
+    missions:
+    - scene: Mission 9
+      title: First Contact
+      description: (Sojourner 1997) Find and analyse Barnacle Bill (Rock Size = 0.4m).
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        block: 1
+        text: Analyse Barnacle Bill
+      - type: 7
+        value: 0
+        block: 12
+        text: Use Repeat Forever code block
+      - type: 2
+        value: 55
+        block: 1
+        text: Finish under 55 seconds
+    - scene: Mission 10
+      title: Send a Message to Earth
+      description: (Sojourner 1997) Photograph Yogi rock (Size = 1.2m) and return
+        to the Pathfinder lander.
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        block: 1
+        text: Send the correct photograph
+      - type: 7
+        value: 0
+        block: 11
+        text: Use While code block
+      - type: 7
+        value: 0
+        block: 12
+        text: Use Repeat Forever code block
+    - scene: Mission 11
+      title: The Dust Devil
+      description: "(Spirit 2004\u20132010) During the dust-clearing event, avoid
+        obstacles, recharge, and continue.\r\n"
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        block: 1
+        text: Reach the Lander
+      - type: 7
+        value: 5
+        block: 6
+        text: Use Wait code blocks
+      - type: 3
+        value: 50
+        block: 1
+        text: Reach with minimum 50% battery
+    - scene: Mission 12
+      title: The Broken Wheel
+      description: "(Spirit 2004\u20132010) Spirit's damaged wheel dragged across
+        the ground."
+      maxRoverMass: 500
+      starGoals:
+      - type: 0
+        value: 0
+        block: 1
+        text: Reach the Lander
+      - type: 7
+        value: 0
+        block: 11
+        text: Use While code block
+      - type: 3
+        value: 40
+        block: 1
+        text: Finish with minimum 40% battery

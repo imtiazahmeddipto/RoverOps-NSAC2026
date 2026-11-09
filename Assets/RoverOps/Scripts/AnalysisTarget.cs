@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // Marks a rock the mission wants analyzed.
@@ -6,6 +7,13 @@ using UnityEngine;
 public class AnalysisTarget : MonoBehaviour
 {
     public string targetName = "Target Rock";   // shown in the status, e.g. "Blue Rock"
+
+    static readonly List<AnalysisTarget> all = new List<AnalysisTarget>();
+    public static int Count => all.Count;       // target rocks in the scene (0 = any rock counts)
+    public static IReadOnlyList<AnalysisTarget> All => all;
+
+    void OnEnable() { if (!all.Contains(this)) all.Add(this); }
+    void OnDisable() => all.Remove(this);
 
     void OnDrawGizmos()
     {

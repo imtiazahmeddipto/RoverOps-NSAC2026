@@ -44,7 +44,7 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
         get
         {
             if (selector == null) return null;
-            Button b = selector.GetComponentInParent<Button>();
+            Button b = selector.GetComponentInParent<Button>(true);
             return b != null ? (RectTransform)b.transform : selector.rectTransform;
         }
     }
@@ -66,7 +66,7 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
     {
         if (selector != null)
         {
-            Button selectorButton = selector.GetComponentInParent<Button>();
+            Button selectorButton = selector.GetComponentInParent<Button>(true);
 
             if (selectorButton != null)
                 selectorButton.onClick.AddListener(CycleOption);
@@ -78,7 +78,7 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
         if (compare != null)
         {
-            Button compareButton = compare.GetComponentInParent<Button>();
+            Button compareButton = compare.GetComponentInParent<Button>(true);
 
             if (compareButton != null)
                 compareButton.onClick.AddListener(() => Cycle(compare, Signs));
@@ -192,6 +192,7 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
         dragged.GetComponent<CodeBlock>().body.anchoredPosition = Vector2.zero;
         dragged.position = e.position;
         UpdateIndents(programArea);
+        GameAudio.Play(GameAudio.Sfx.BlockPickup);
     }
 
     public void OnDrag(PointerEventData e)
@@ -214,8 +215,13 @@ public class CodeBlock : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
             dragged.SetParent(programArea, false);
             dragged.localScale = Vector3.one;
             dragged.SetSiblingIndex(index);
+            GameAudio.Play(GameAudio.Sfx.BlockDrop);
         }
-        else Destroy(dragged.gameObject);    // dropped outside the editor = delete
+        else
+        {
+            Destroy(dragged.gameObject);     // dropped outside the editor = delete
+            GameAudio.Play(GameAudio.Sfx.BlockDrop);   // deleting uses the same soft drop sound
+        }
         dragged = null;
         UpdateIndents(programArea);
     }

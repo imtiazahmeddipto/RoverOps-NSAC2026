@@ -29,6 +29,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/RoverOps/Scenes/Mission 7.unity
     guid: 8517493771a72b04b9794d595962da05
+  - enabled: 1
+    path: Assets/RoverOps/Scenes/Mission 8.unity
+    guid: 46ffd90bee0752c4a83331a760400306
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

@@ -17,20 +17,41 @@ public class MissionHandler : MonoBehaviour
     //   FinishLine  - the rover's nose reaches the finish zone (as before)
     //   SendData    - the lander has received the data below (Send Data block, within the Lander's range)
     //   Both        - the data is sent AND the rover is in the finish zone
-    //   CollectSamples - only the samples below (no finish line, no data)
+    //   CollectSamples - only the samples below (no finish line, no data).
+    //                    If the scene has SampleTarget samples, ALL of them must be collected instead (Samples To Collect is not used)
+    //   AnalyzeRock - the rover analyzes Rocks To Analyze rocks (no sending needed).
+    //                 If the scene has AnalysisTarget rocks, ONLY those count; with none, any rock counts.
     // Samples To Collect is an extra goal in ANY mode: 0 = not needed (and not shown in the status).
-    public enum FinishBy { FinishLine, SendData, Both, CollectSamples }   // new ones at the END (scenes save the number)
+    public enum FinishBy { FinishLine, SendData, Both, CollectSamples, AnalyzeRock }   // new ones at the END (scenes save the number)
 
     [Header("How the mission ends")]
     public FinishBy finishBy = FinishBy.FinishLine;
     [Min(0)] public int analysesToSend = 1;            // analyses of rocks WITH an AnalysisTarget the lander must receive
     [Min(0)] public int photosToSend = 0;              // photos WITH a PhotoTarget in them the lander must receive
     [Min(0)] public int samplesToCollect = 0;          // samples the rover must have in its sample box (0 = not needed)
+    [Min(0)] public int rocksToAnalyze = 1;            // AnalyzeRock only: rocks to analyze (target rocks only, if the scene has any)
 
     public bool NeedsFinish => finishBy == FinishBy.FinishLine || finishBy == FinishBy.Both;
     bool NeedsData => finishBy == FinishBy.SendData || finishBy == FinishBy.Both;
-    bool NeedsSamples => samplesToCollect > 0;
-    bool HasGoal => NeedsFinish || NeedsData || NeedsSamples;
+    bool UsesSampleTargets => finishBy == FinishBy.CollectSamples && SampleTarget.Count > 0;
+    bool NeedsSamples => samplesToCollect > 0 || UsesSampleTargets;
+    int SamplesDone => UsesSampleTargets ? rover.TargetSamplesCollected : rover.Samples;
+    int SamplesNeeded => UsesSampleTargets ? SampleTarget.Count : samplesToCollect;
+    public bool EndsBySampleTargets => UsesSampleTargets;   // the Rover asks: a wrong sample is an error right away
+    bool NeedsAnalysis => finishBy == FinishBy.AnalyzeRock;
+    public bool EndsByAnalysis => NeedsAnalysis;       // the Rover asks: a wrong rock is an error right away
+
+    // The target indicators ask: does the mission still need target rocks analyzed / target photos?
+    public bool WantsAnalysisTarget => rover != null && !completed
+        && ((NeedsAnalysis && RocksDone < rocksToAnalyze) || (NeedsData && rover.AnalysesSent < analysesToSend));
+    public bool WantsPhotoTarget => rover != null && !completed && NeedsData && rover.PhotosSent < photosToSend;
+    public bool WantsSampleTarget => rover != null && !completed && UsesSampleTargets && rover.TargetSamplesCollected < SampleTarget.Count;
+    bool HasGoal => NeedsFinish || NeedsData || NeedsSamples || NeedsAnalysis;
+
+    // Rocks that count: only target rocks when the scene has any, else every analyzed rock
+    bool UsesTargets => AnalysisTarget.Count > 0;
+    int RocksDone => UsesTargets ? rover.TargetRocksAnalyzed : rover.RocksAnalyzed;
+    string RockLabel => UsesTargets ? "target rock" : "rock";
 
     [Header("Results Panel")]
     public GameObject resultsPanel;
@@ -85,7 +106,7 @@ public class MissionHandler : MonoBehaviour
             missionNameText.text = mission.title;
         }
 
-        if (finishBy == FinishBy.CollectSamples && samplesToCollect == 0)
+        if (finishBy == FinishBy.CollectSamples && samplesToCollect == 0 && SampleTarget.Count == 0)
             Debug.LogWarning("[Mission] Finish By is CollectSamples but Samples To Collect is 0: the mission can't end. Set it to 1 or more.", this);
 
         if (NeedsData && Lander.Count == 0)
@@ -104,6 +125,18 @@ public class MissionHandler : MonoBehaviour
             return;
         }
 
+        if (UsesSampleTargets && rover.sampleCapacity < SampleTarget.Count)
+            Debug.LogWarning("[Mission] The scene has " + SampleTarget.Count + " target samples but the sample box holds "
+                             + rover.sampleCapacity + " (it may change with the drill fitted in the garage).", this);
+
+        if (NeedsAnalysis && UsesTargets && AnalysisTarget.Count < rocksToAnalyze)
+            Debug.LogWarning("[Mission] Rocks To Analyze is " + rocksToAnalyze + " but the scene has only " + AnalysisTarget.Count
+                             + " target rocks (AnalysisTarget): the mission can't end.", this);
+
+        if (NeedsAnalysis && rocksToAnalyze > rover.analysisCapacity)
+            Debug.LogWarning("[Mission] Rocks To Analyze (" + rocksToAnalyze + ") is more than the rover's Analysis Capacity ("
+                             + rover.analysisCapacity + "): the player must use Send Data between analyses.", this);
+
         if (resultsPanel != null)
             resultsPanel.SetActive(false);
     }
@@ -115,7 +148,8 @@ public class MissionHandler : MonoBehaviour
 
         if ((!NeedsFinish || ReachedFinish())
             && (!NeedsData || DataDelivered())
-            && (!NeedsSamples || rover.Samples >= samplesToCollect))
+            && (!NeedsSamples || SamplesDone >= SamplesNeeded)
+            && (!NeedsAnalysis || RocksDone >= rocksToAnalyze))
             Complete();
     }
 
@@ -136,7 +170,10 @@ public class MissionHandler : MonoBehaviour
         }
 
         if (NeedsSamples)
-            parts.Add(Count("Samples", rover.Samples, samplesToCollect));
+            parts.Add(Count(UsesSampleTargets ? "Target Samples" : "Samples", SamplesDone, SamplesNeeded));
+
+        if (NeedsAnalysis)
+            parts.Add(Count(UsesTargets ? "Analyze Target Rock" : "Analyze Rock", RocksDone, rocksToAnalyze));
 
         return string.Join("    ", parts);
     }
@@ -148,6 +185,9 @@ public class MissionHandler : MonoBehaviour
     }
 
     static string Done(string text) => "<color=#7CFC7C>" + text + "</color>";
+
+    // "finish dist" in the Code Editor: metres to the finish zone (0 inside it), Infinity = no finish line in this mission
+    public float FinishLineDistance => finishLine != null && rover != null ? FinishDistance() : Mathf.Infinity;
 
     // Ground distance from the rover's nose to the nearest edge of the finish zone (0 inside it)
     float FinishDistance()
@@ -178,8 +218,11 @@ public class MissionHandler : MonoBehaviour
         if (NeedsFinish && !ReachedFinish())
             reasons.Add("The rover didn't reach the finish line.");
 
-        if (NeedsSamples && rover.Samples < samplesToCollect)
-            reasons.Add("The rover collected only " + rover.Samples + "/" + samplesToCollect + " samples.");
+        if (NeedsSamples && SamplesDone < SamplesNeeded)
+            reasons.Add("The rover collected only " + SamplesDone + "/" + SamplesNeeded + (UsesSampleTargets ? " target samples." : " samples."));
+
+        if (NeedsAnalysis && RocksDone < rocksToAnalyze)
+            reasons.Add("The rover analyzed only " + RocksDone + "/" + rocksToAnalyze + " " + RockLabel + (rocksToAnalyze == 1 ? "." : "s."));
 
         if (NeedsData && !DataDelivered())
         {
@@ -213,6 +256,8 @@ public class MissionHandler : MonoBehaviour
             return;
 
         completed = true;
+        GameAudio.Play(GameAudio.Sfx.MissionComplete);
+        GameAudio.DuckMusic(3.5f);                       // the music steps back so the success sound stands out
 
         rover.EndMission("<color=#7CFC7C>MISSION COMPLETE!</color>");
 
@@ -391,6 +436,9 @@ public class MissionHandler : MonoBehaviour
             case GoalType.MinPhotosSent:
                 return rover.PhotosSent >= goal.value;
 
+            case GoalType.UseBlock:
+                return rover.UsedBlock(goal.block);
+
             default:
                 return false;
         }
@@ -470,7 +518,7 @@ public class MissionHandler : MonoBehaviour
             if (database.IsUnlocked(sectorIndex, nextIndex))
             {
                 MissionDatabase.SelectedScene = nextMission.scene;
-                SceneManager.LoadScene(nextMission.scene);
+                LoadWithTransition(nextMission.scene);
             }
             else
             {
@@ -488,8 +536,20 @@ public class MissionHandler : MonoBehaviour
     // Return to the mission selection screen.
     public void BackToMenu()
     {
+        if (Rover.IsRunning || ProgramBuilder.IsBuilding)        // can't leave while the rover is out on a run
+        {
+            if (rover != null) rover.Message("<color=#FFC63A>Stop the program first (press STOP), then go back to Missions.</color>");
+            GameAudio.Play(GameAudio.Sfx.Error);
+            return;
+        }
+        LoadWithTransition(missionsScene);
+    }
 
-        if (transition) transition.LoadScene(missionsScene);
-        else SceneManager.LoadScene(missionsScene);
+    // Plays the end transition first (if there is one), then loads the scene
+    void LoadWithTransition(string sceneName)
+    {
+        Time.timeScale = 1f;                    // the transition runs on game time: never at a run speed
+        if (transition) transition.LoadScene(sceneName);
+        else SceneManager.LoadScene(sceneName);
     }
 }

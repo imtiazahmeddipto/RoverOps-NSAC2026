@@ -15,6 +15,8 @@ public class RoverCamera : MonoBehaviour
     [Header("Camera Stats")]
     public float range = 8f;
     public float viewAngle = 60f;
+    [Tooltip("Rocks / samples closer than this (m) right ahead are still measured after they leave the bottom of the picture")]
+    public float nearRange = 3f;
 
     [Header("Detection Layers")]
     public LayerMask rockLayer;
@@ -81,7 +83,11 @@ public class RoverCamera : MonoBehaviour
     readonly List<float> seenDistance = new List<float>();
     readonly List<RectTransform> boxes = new List<RectTransform>();
     readonly List<TMP_Text> nameLabels = new List<TMP_Text>();   // "ROCK 0.0 m" / "SAMPLE 0.0 m" (NameTXT in the box template)
-    readonly List<TMP_Text> sizeLabels = new List<TMP_Text>();   // "SIZE 0.0 m", HD Cam only (SizeTXT in the box template)
+    readonly List<TMP_Text> sizeLabels = new List<TMP_Text>();
+    // the name label's own place in the box template (lander labels move to the center, others keep this)
+    bool labelSaved;
+    Vector2 labelAnchorMin, labelAnchorMax, labelPivot, labelPos, labelSize;
+    TextAlignmentOptions labelAlignment;   // "SIZE 0.0 m", HD Cam only (SizeTXT in the box template)
     bool hasCamera = true;              // false only when "No Camera" is fitted
     public bool HasCamera => hasCamera;
 
@@ -329,40 +335,83 @@ public class RoverCamera : MonoBehaviour
             if (!VisiblePoint(c, eye, out Vector3 point))
                 continue;
 
-            float distance = GroundDistance(point);
+            float distance = NearestDistance(c);       // to the rock's nearest edge, not the point the camera sees
 
             seen.Add(c);
             seenDistance.Add(distance);
 
-            if (IsSample(c))
+            if (IsSample(c)) SamplesInView++;
+            else if (!IsLander(c)) RocksInView++;
+            Consider(c, distance);
+        }
+
+        // Close up, a low rock leaves the bottom of the picture before the rover reaches it.
+        // Keep measuring what is right ahead (like a real rover's hazard camera), so "rock dist" doesn't jump to "none".
+        foreach (Collider c in Physics.OverlapSphere(nose.position, nearRange, detectionMask))
+        {
+            if (c == null || seen.Contains(c) || c.transform.IsChildOf(transform) || c.name == "Ground")
+                continue;
+
+            Vector3 to = c.bounds.center - transform.position;
+            to.y = 0f;
+            if (to.sqrMagnitude > 0.0001f && Vector3.Angle(transform.forward, to) > viewAngle / 2f)
+                continue;                               // not ahead of the rover
+
+            Consider(c, NearestDistance(c));
+        }
+    }
+
+    // Keeps the nearest rock / sample / lander and its readings
+    void Consider(Collider c, float distance)
+    {
+        if (IsSample(c))
+        {
+            if (distance < SampleDistance)
             {
-                SamplesInView++;
-                if (distance < SampleDistance)
-                {
-                    SampleDistance = distance;
-                    SampleSize = HasHDCamera ? Measure(c) : 0f;    // only the HD Cam sees how big it is
-                    SampleAngle = AngleTo(c);
-                }
-            }
-            else if (IsLander(c))
-            {
-                if (distance < LanderDistance)
-                {
-                    LanderDistance = distance;
-                    LanderAngle = AngleTo(c);
-                }
-            }
-            else
-            {
-                RocksInView++;
-                if (distance < RockDistance)
-                {
-                    RockDistance = distance;
-                    RockAngle = AngleTo(c);
-                    RockSize = HasHDCamera ? Measure(c) : 0f;      // only the HD Cam sees how big it is
-                }
+                SampleDistance = distance;
+                SampleSize = HasHDCamera ? Measure(c) : 0f;    // only the HD Cam sees how big it is
+                SampleAngle = AngleTo(c);
             }
         }
+        else if (IsLander(c))
+        {
+            if (distance < LanderDistance)
+            {
+                LanderDistance = distance;
+                LanderAngle = AngleTo(c);
+            }
+        }
+        else if (distance < RockDistance)
+        {
+            RockDistance = distance;
+            RockAngle = AngleTo(c);
+            RockSize = HasHDCamera ? Measure(c) : 0f;          // only the HD Cam sees how big it is
+        }
+    }
+
+    // Ground distance from the nose to the nearest point of the object
+    // (its real shape when Unity can measure it, else its box)
+    float NearestDistance(Collider c)
+    {
+        Vector3 from = nose.position;
+        bool exact = !(c is TerrainCollider) && !(c is MeshCollider mesh && !mesh.convex);
+        return GroundDistance(exact ? c.ClosestPoint(from) : c.bounds.ClosestPoint(from));
+    }
+
+    // The first thing a ray hits, skipping the rover's own parts (the solar panel mustn't hide a rock)
+    readonly RaycastHit[] rayHits = new RaycastHit[16];
+
+    bool FirstHit(Vector3 from, Vector3 direction, float length, out RaycastHit first)
+    {
+        first = default;
+        int count = Physics.RaycastNonAlloc(from, direction, rayHits, length);
+        float best = Mathf.Infinity;
+        for (int i = 0; i < count; i++)
+        {
+            if (rayHits[i].collider.transform.IsChildOf(transform)) continue;
+            if (rayHits[i].distance < best) { best = rayHits[i].distance; first = rayHits[i]; }
+        }
+        return best < Mathf.Infinity;
     }
 
     // --------------------------------------------------
@@ -408,11 +457,11 @@ public class RoverCamera : MonoBehaviour
         {
             Vector3 direction = target - eye;
 
-            if (Physics.Raycast(
+            if (FirstHit(
                 eye,
                 direction,
-                out RaycastHit hit,
-                direction.magnitude + 0.1f
+                direction.magnitude + 0.1f,
+                out RaycastHit hit
             ))
             {
                 if (hit.collider == c && hit.distance <= range)
@@ -510,6 +559,34 @@ public class RoverCamera : MonoBehaviour
     // DETECTION BOXES
     // --------------------------------------------------
 
+    // Lander: label in the middle of the box. Rock / sample: the template's own place
+    void PlaceLabel(TMP_Text label, bool center)
+    {
+        RectTransform r = label.rectTransform;
+        if (!labelSaved)
+        {
+            labelAnchorMin = r.anchorMin; labelAnchorMax = r.anchorMax;
+            labelPivot = r.pivot; labelPos = r.anchoredPosition; labelSize = r.sizeDelta;
+            labelAlignment = label.alignment;
+            labelSaved = true;
+        }
+
+        if (center)
+        {
+            Vector2 size = r.rect.size;                          // keep its size when the anchors change
+            r.anchorMin = r.anchorMax = r.pivot = new Vector2(0.5f, 0.5f);
+            r.sizeDelta = size;
+            r.anchoredPosition = Vector2.zero;
+            label.alignment = TextAlignmentOptions.Center;
+        }
+        else
+        {
+            r.anchorMin = labelAnchorMin; r.anchorMax = labelAnchorMax;
+            r.pivot = labelPivot; r.sizeDelta = labelSize; r.anchoredPosition = labelPos;
+            label.alignment = labelAlignment;
+        }
+    }
+
     void DrawBoxes()
     {
         Camera view = roverView
@@ -584,6 +661,7 @@ public class RoverCamera : MonoBehaviour
             {
                 nameLabel.text = (sample ? "SAMPLE " : lander ? "LANDER " : "ROCK ") + seenDistance[i].ToString("0.0") + " m";
                 nameLabel.color = color;
+                PlaceLabel(nameLabel, lander);                      // lander: in the middle of the box
             }
 
             if (sizeLabel != null)

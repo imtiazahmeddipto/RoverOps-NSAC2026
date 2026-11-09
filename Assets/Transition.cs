@@ -36,7 +36,11 @@ public class Transition : MonoBehaviour
         isLoading = true;
         sceneToLoad = sceneName;
 
-        if (endingSceneTransition != null) endingSceneTransition.SetActive(true);
+        if (endingSceneTransition != null)
+        {
+            endingSceneTransition.SetActive(true);
+            GameAudio.Play(GameAudio.Sfx.Transition);          // one soft glide + 'boop' as the shape grows and covers the screen
+        }
         Invoke(nameof(LoadNextScene), endTransitionDuration);
     }
 

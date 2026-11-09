@@ -66,6 +66,7 @@ public class RoverLoadout : MonoBehaviour
             rover.acceleration = 1f * wheels.Stat(1);    // grip: how hard the wheels can push...
             rover.braking = 2f * wheels.Stat(1);         // ...and stop
             rover.energyPerMeter = wheels.Stat(2);
+            rover.grip = wheels.Stat(1);                 // grip also sets the steepest slope it can climb
         }
         PartData cam = database.Equipped(PartType.Camera);
 

@@ -102,6 +102,7 @@ public class ProgramBuilder : MonoBehaviour
 
             Refresh(null);
             if (editorView != null) editorView.ScrollToTop();      // done: back to the first block
+            if (stepDelay <= 0f && placed > 0) GameAudio.Play(GameAudio.Sfx.BlockDrop);   // all placed at once: one drop sound
             string done = warnings == 0
                 ? "<color=#7CFC7C>AI built the program (" + placed + " blocks). Press RUN.</color>"
                 : "<color=#FFC63A>AI built the program with " + warnings + (warnings == 1 ? " problem" : " problems")
@@ -146,8 +147,10 @@ public class ProgramBuilder : MonoBehaviour
         try
         {
             CodeBlock block = Place(template);
-            block.Setup(step.option, step.sign, step.value);
+            Fix(template, step, out string option, out string value);
+            block.Setup(option, step.sign, value);
             Refresh(block);
+            if (stepDelay > 0f) GameAudio.Play(GameAudio.Sfx.BlockDrop);   // like dropping it by hand (all at once = silent, no burst)
             return true;
         }
         catch (System.Exception e)
@@ -155,6 +158,18 @@ public class ProgramBuilder : MonoBehaviour
             Debug.LogError("[AI] Step " + (index + 1) + " (" + step.type + ") could not be placed: " + e.Message, this);
             Debug.LogException(e, this);
             return false;
+        }
+    }
+
+    // A chip option (e.g. "lander detected") typed in Value instead of Option: use it as the option
+    static void Fix(CodeBlock template, SolutionStep step, out string option, out string value)
+    {
+        option = step.option;
+        value = step.value;
+        if (string.IsNullOrWhiteSpace(option) && !string.IsNullOrWhiteSpace(value) && template.HasOption(value))
+        {
+            option = value;
+            value = "";
         }
     }
 
@@ -264,6 +279,9 @@ public class ProgramBuilder : MonoBehaviour
                 Warn(where + "there is no such block in the Blocks panel (it is skipped).", ref problems);
             else
             {
+                Fix(template, step, out string fixedOption, out _);
+                if (string.IsNullOrWhiteSpace(step.option) && !string.IsNullOrWhiteSpace(fixedOption))
+                    Debug.LogWarning(where + "'" + fixedOption.Trim() + "' is in Value but is a chip option: it is used as the Option. Move it to Option.", this);
                 if (!string.IsNullOrWhiteSpace(step.option) && !template.HasOption(step.option))
                     Warn(where + "the block has no option '" + step.option.Trim() + "'.", ref problems);
                 if (!string.IsNullOrWhiteSpace(step.sign) && System.Array.IndexOf(Signs, step.sign.Trim()) < 0)

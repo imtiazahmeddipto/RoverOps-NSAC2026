@@ -37,8 +37,8 @@ public class MissionSelectUI : MonoBehaviour
 
     [Header("Mission video")]
     public RawImage missionVideo;           // shows the video
-    public VideoPlayer videoPlayer;         // plays mission.video in a loop
-    [Tooltip("Optional. Leave empty and one is made at the clip's size.")]
+    public VideoPlayer videoPlayer;         // plays StreamingAssets/<mission scene>.mp4 in a loop
+    [Tooltip("Optional. Leave empty and one is made at the video's size.")]
     public RenderTexture videoTexture;
 
     int page;
@@ -55,14 +55,19 @@ public class MissionSelectUI : MonoBehaviour
         videoPlayer.isLooping = true;
         videoPlayer.audioOutputMode = VideoAudioOutputMode.None;
         videoPlayer.renderMode = VideoRenderMode.RenderTexture;
-        videoPlayer.prepareCompleted += p => { missionVideo.enabled = true; p.Play(); };
+        videoPlayer.prepareCompleted += OnVideoReady;
+        videoPlayer.errorReceived += (p, error) =>              // no file for this mission (or it can't be played)
+        {
+            missionVideo.enabled = false;
+            Debug.LogWarning("[Missions] Video not played: " + p.url + " (" + error + ")");
+        };
         missionVideo.enabled = false;
     }
 
     // panel shown again (e.g. back from the garage): restart the video
     void OnEnable()
     {
-        if (videoPlayer && videoPlayer.clip) videoPlayer.Prepare();
+        if (videoPlayer && (videoPlayer.clip || !string.IsNullOrEmpty(videoPlayer.url))) videoPlayer.Prepare();
     }
 
     void OnDestroy()
@@ -70,24 +75,40 @@ public class MissionSelectUI : MonoBehaviour
         if (ownTexture && videoTexture != null) videoTexture.Release();
     }
 
-    void ShowVideo(VideoClip clip)
+    // The mission's video is Assets/StreamingAssets/<scene name>.mp4, e.g. "Mission 1.mp4".
+    // Played by URL: the only way videos work in WebGL (and it works the same in the editor and on PC).
+    void ShowVideo(string scene)
     {
         if (!videoPlayer || !missionVideo) return;
         videoPlayer.Stop();
         missionVideo.enabled = false;           // hidden until the first frame is ready (no black flash)
-        videoPlayer.clip = clip;
-        if (clip == null) return;
+        videoPlayer.clip = null;
+        videoPlayer.url = "";
+        if (string.IsNullOrEmpty(scene)) return;
 
-        int w = (int)clip.width, h = (int)clip.height;
+        string path = Application.streamingAssetsPath + "/" + scene + ".mp4";
+#if !UNITY_WEBGL || UNITY_EDITOR
+        if (!System.IO.File.Exists(path)) return;               // this mission has no video (yet)
+#endif
+        videoPlayer.source = VideoSource.Url;
+        videoPlayer.url = path;
+        videoPlayer.Prepare();
+    }
+
+    // The video is loaded: size the RenderTexture to it, then show and play it
+    void OnVideoReady(VideoPlayer player)
+    {
+        int w = Mathf.Max(1, (int)player.width), h = Mathf.Max(1, (int)player.height);
         if (videoTexture == null || (ownTexture && (videoTexture.width != w || videoTexture.height != h)))
         {
             if (ownTexture && videoTexture != null) videoTexture.Release();
             videoTexture = new RenderTexture(w, h, 0);
             ownTexture = true;
         }
-        videoPlayer.targetTexture = videoTexture;
+        player.targetTexture = videoTexture;
         missionVideo.texture = videoTexture;
-        videoPlayer.Prepare();
+        missionVideo.enabled = true;
+        player.Play();
     }
 
     // Back button OnClick (if this object never turns off): restart the selected mission's video
@@ -103,8 +124,15 @@ public class MissionSelectUI : MonoBehaviour
     }
 
     // ---------------- PAGES ----------------
-    public void NextPage() => ShowPage(page + 1);
-    public void PrevPage() => ShowPage(page - 1);
+    public void NextPage() => TurnPage(page + 1);
+    public void PrevPage() => TurnPage(page - 1);
+
+    void TurnPage(int index)
+    {
+        int before = page;
+        ShowPage(index);
+        if (page != before) GameAudio.Play(GameAudio.Sfx.PageTurn);
+    }
 
     void ShowPage(int index)
     {
@@ -155,7 +183,7 @@ public class MissionSelectUI : MonoBehaviour
         missionNumber.text = "MISSION " + (index + 1);
         missionTitle.text = mission.title;
         missionDescription.text = mission.description;
-        ShowVideo(mission.video);
+        ShowVideo(scene);                       // StreamingAssets/<scene>.mp4
 
         for (int i = 0; i < starGoals.childCount; i++)
         {

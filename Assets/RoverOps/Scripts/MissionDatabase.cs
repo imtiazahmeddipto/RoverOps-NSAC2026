@@ -1,18 +1,18 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Video;
 
 // One star goal of a mission. Only the text for now.
 // TODO: what the goal checks (time, battery, samples...) so the mission scene can award the star.
-public enum GoalType { Finish, MaxBlocks, MaxTime, MinBattery, MinSamples, MinAnalysesSent, MinPhotosSent }   // add new ones at the END
+public enum GoalType { Finish, MaxBlocks, MaxTime, MinBattery, MinSamples, MinAnalysesSent, MinPhotosSent, UseBlock }   // add new ones at the END
 
 // One star goal of a mission: what it checks and the number to beat
 [Serializable]
 public class StarGoal
 {
-    public GoalType type;
+    [GoalTypeMenu] public GoalType type;           // the dropdown also has Blocks > (every block) = "use this block"
     public float value;
+    [HideInInspector] public Block block = Block.MoveForward;   // set from the Type dropdown's Blocks menu
     [Tooltip("Leave empty to write it from the type and value")]
     public string text;
 
@@ -29,9 +29,23 @@ public class StarGoal
                 case GoalType.MinSamples: return "Collect " + value + " samples";
                 case GoalType.MinAnalysesSent: return "Send " + value + " target rock analyses to the lander";
                 case GoalType.MinPhotosSent: return "Send " + value + " target photos to the lander";
+                case GoalType.UseBlock: return "Use the " + BlockName(block) + " block";
                 default: return "Reach the finish line";
             }
         }
+    }
+
+    // "AnalyzeRock" -> "Analyze Rock"
+    public static string BlockName(Block b)
+    {
+        string raw = b.ToString();
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < raw.Length; i++)
+        {
+            if (i > 0 && char.IsUpper(raw[i])) sb.Append(' ');
+            sb.Append(raw[i]);
+        }
+        return sb.ToString();
     }
 }
 
@@ -43,7 +57,6 @@ public class MissionData
     public string scene;
     public string title = "New Mission";
     [TextArea(2, 4)] public string description;
-    public VideoClip video;
 
     [Min(1f)]
     [Tooltip("Maximum allowed total rover mass for this mission, in kilograms.")]

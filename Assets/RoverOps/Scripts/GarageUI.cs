@@ -250,6 +250,9 @@ public class GarageUI : MonoBehaviour
             return;
         }
 
+        bool alreadyOn = database != null && database.IsEquipped(part);
+        if (!alreadyOn) GameAudio.Play(GameAudio.Sfx.Equip);   // only when the part really changes
+
         if (garageRover != null)
             garageRover.Equip(part);
         else if (database != null)
@@ -517,18 +520,21 @@ public class GarageUI : MonoBehaviour
         if (database.SpacePoints < part.spacePointCost)
         {
             ShowPurchaseError("Not enough Space Points!");
+            GameAudio.Play(GameAudio.Sfx.Error);
             return;
         }
 
         if (!database.TryBuy(part))
         {
             ShowPurchaseError("Could not buy this part.");
+            GameAudio.Play(GameAudio.Sfx.Error);
             return;
         }
 
         ClearPurchaseError();
         UpdateSpacePointsUI();
         Refresh();
+        GameAudio.Play(GameAudio.Sfx.Purchase);
     }
 
     private void UpdateSpacePointsUI()
