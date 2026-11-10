@@ -16739,7 +16739,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: equipmentNeeded.Array.size
-      value: 1
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[0].sign
@@ -16844,6 +16844,14 @@ PrefabInstance:
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: 'equipmentNeeded.Array.data[0]'
       value: HD Cam
+      objectReference: {fileID: 0}
+    - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
+      propertyPath: 'equipmentNeeded.Array.data[1]'
+      value: Any:Solar
+      objectReference: {fileID: 0}
+    - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
+      propertyPath: 'equipmentNeeded.Array.data[2]'
+      value: Any:Science
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[0].option

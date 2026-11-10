@@ -13,7 +13,7 @@ public class SpacePointsWindow : EditorWindow
     static void Open()
     {
         SpacePointsWindow w = GetWindow<SpacePointsWindow>("Space Points");
-        w.minSize = new Vector2(280, 230);
+        w.minSize = new Vector2(280, 280);
     }
 
     void OnEnable()
@@ -64,11 +64,31 @@ public class SpacePointsWindow : EditorWindow
         if (GUILayout.Button("Reset to starting SP (" + database.startingSpacePoints.ToString("N0") + ")"))
             Apply(database.ResetSpacePoints);
 
+        // NEW GAME: wipes every save (SP, bought + equipped parts, finished missions, stars, rewards)
+        EditorGUILayout.Space(10);
+        GUI.backgroundColor = new Color(1f, 0.45f, 0.45f);
+        if (GUILayout.Button("RESET GAME (start completely new)", GUILayout.Height(28)))
+        {
+            if (EditorUtility.DisplayDialog("Reset game?",
+                "This deletes ALL saved progress:\n\n• Space Points\n• Bought and equipped parts\n• Finished missions and stars\n• Star rewards already paid\n\nThe game will start like the first time. This can't be undone.",
+                "Reset everything", "Cancel"))
+                Apply(ResetGame);
+        }
+        GUI.backgroundColor = Color.white;
+
         EditorGUILayout.Space(4);
         EditorGUILayout.HelpBox("SP are saved on this computer (PlayerPrefs), the same balance the garage shop and the AI use.", MessageType.None);
     }
 
     void Change(int delta) => Apply(() => database.SetSpacePoints(database.SpacePoints + delta));   // never below 0
+
+    void ResetGame()
+    {
+        PlayerPrefs.DeleteAll();                 // every RoverOps save lives in PlayerPrefs
+        database.ResetSpacePoints();             // back to Starting Space Points (0)
+        PlayerPrefs.Save();
+        Debug.Log("[RoverOps] Game reset: all progress deleted, starting a new game.");
+    }
 
     void Apply(System.Action action)
     {

@@ -17241,7 +17241,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   rover: {fileID: 886246722}
   speedMultiplier: 0.7
-  powerMultiplier: 2
+  powerMultiplier: 1.5
   keepOffset: 1
   followHeight: 1
   smoothing: 0

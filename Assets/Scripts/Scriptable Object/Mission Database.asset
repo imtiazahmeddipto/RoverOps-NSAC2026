@@ -19,7 +19,7 @@ MonoBehaviour:
     - scene: Mission 1
       title: Reach the Target
       description: Drive the rover to the marked location.
-      maxRoverMass: 500
+      maxRoverMass: 180
       starGoals:
       - type: 0
         value: 0
@@ -30,13 +30,13 @@ MonoBehaviour:
         block: 1
         text: Use max 1 code blocks
       - type: 2
-        value: 15
+        value: 25
         block: 1
-        text: Finish under 15 seconds
+        text: Finish under 25 seconds
     - scene: Mission 2
       title: Turn and Move
       description: Turn towards the flag and reach it.
-      maxRoverMass: 500
+      maxRoverMass: 180
       starGoals:
       - type: 0
         value: 0
@@ -47,13 +47,13 @@ MonoBehaviour:
         block: 1
         text: Use maximum 2 code blocks
       - type: 2
-        value: 30
+        value: 35
         block: 1
-        text: Finish under 30 seconds
+        text: Finish under 35 seconds
     - scene: Mission 3
       title: Analyze a Rock
       description: Use camera readings to find and analyze a rock.
-      maxRoverMass: 500
+      maxRoverMass: 215
       starGoals:
       - type: 0
         value: 0
@@ -71,7 +71,7 @@ MonoBehaviour:
       title: Small or Large?
       description: Equip the HD Camera, identify the correct sample by size (4) and
         analyze it.
-      maxRoverMass: 500
+      maxRoverMass: 215
       starGoals:
       - type: 0
         value: 0
@@ -91,7 +91,7 @@ MonoBehaviour:
     - scene: Mission 5
       title: First Discovery
       description: Analyse any rock and transmit the scientific data.
-      maxRoverMass: 500
+      maxRoverMass: 215
       starGoals:
       - type: 5
         value: 1
@@ -108,7 +108,7 @@ MonoBehaviour:
     - scene: Mission 6
       title: Capture the Moment
       description: Photograph the rock, return to the lander and send the data.
-      maxRoverMass: 500
+      maxRoverMass: 220
       starGoals:
       - type: 0
         value: 0
@@ -126,7 +126,7 @@ MonoBehaviour:
       title: Power & Traction Test
       description: Equip suitable wheels and a solar panel. Navigate the terrain,
         and reach the Lander.
-      maxRoverMass: 500
+      maxRoverMass: 250
       starGoals:
       - type: 0
         value: 0
@@ -143,7 +143,7 @@ MonoBehaviour:
     - scene: Mission 8
       title: Sample Collector
       description: Choose a suitable drill, collect three samples and store them.
-      maxRoverMass: 500
+      maxRoverMass: 250
       starGoals:
       - type: 0
         value: 0
@@ -163,7 +163,7 @@ MonoBehaviour:
     - scene: Mission 9
       title: First Contact
       description: (Sojourner 1997) Find and analyse Barnacle Bill rock (Size = 3m).
-      maxRoverMass: 500
+      maxRoverMass: 230
       starGoals:
       - type: 0
         value: 0
@@ -181,7 +181,7 @@ MonoBehaviour:
       title: Send a Message to Earth
       description: (Sojourner 1997) Photograph Yogi rock (Size = 3.5m) and return
         to the Pathfinder lander.
-      maxRoverMass: 500
+      maxRoverMass: 235
       starGoals:
       - type: 0
         value: 0
@@ -199,7 +199,7 @@ MonoBehaviour:
       title: 'The Dust Storm '
       description: "(Spirit 2004\u20132010) During a dust storm, avoid obstacles,
         wait for solar panels to recharge, and continue."
-      maxRoverMass: 500
+      maxRoverMass: 260
       starGoals:
       - type: 0
         value: 0
@@ -217,7 +217,7 @@ MonoBehaviour:
       title: The Broken Wheel
       description: "(Spirit 2004\u20132010) Drive backwards and reach the finish
         line."
-      maxRoverMass: 500
+      maxRoverMass: 260
       starGoals:
       - type: 0
         value: 0
@@ -237,7 +237,7 @@ MonoBehaviour:
     - scene: Mission 13
       title: Martian Blueberries
       description: "(Opportunity 2004\u20132018) Find and collect three samples."
-      maxRoverMass: 500
+      maxRoverMass: 250
       starGoals:
       - type: 0
         value: 0
@@ -255,7 +255,7 @@ MonoBehaviour:
       title: Escape from Eagle Crater
       description: (Opportunity 2004) Avoid obstacles, climb out of the crater and
         reach the lander.
-      maxRoverMass: 500
+      maxRoverMass: 270
       starGoals:
       - type: 0
         value: 0

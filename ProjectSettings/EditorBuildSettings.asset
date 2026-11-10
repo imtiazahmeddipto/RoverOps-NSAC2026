@@ -24,8 +24,8 @@ EditorBuildSettings:
     path: Assets/Scenes/Mission 5.unity
     guid: 1f5990136732fe742a4c3c6877eacfed
   - enabled: 1
-    path: Assets/RoverOps/Scenes/Mission 6.unity
-    guid: 60c5bb41e3b90ee40ad7cc947f6c32a1
+    path: Assets/Scenes/Mission 6.unity
+    guid: 146acc14d3e3e554f996ddd3c9e9c8a1
   - enabled: 1
     path: Assets/Scenes/Mission 7.unity
     guid: 8517493771a72b04b9794d595962da05
