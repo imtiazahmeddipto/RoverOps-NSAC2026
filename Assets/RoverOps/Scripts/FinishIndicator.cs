@@ -30,6 +30,9 @@ public class FinishIndicator : MonoBehaviour
 
     void Awake()
     {
+        // empty links: find them in the scene (each mission scene has one of each)
+        if (mission == null) mission = FindAnyObjectByType<MissionHandler>();
+        if (roverCamera == null) roverCamera = FindAnyObjectByType<RoverCamera>();
         arrow = (RectTransform)transform;
         graphics = GetComponentsInChildren<Graphic>(true);
     }

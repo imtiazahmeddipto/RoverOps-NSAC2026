@@ -98,11 +98,13 @@ public class RoverLoadout : MonoBehaviour
         PartData solar = database.Equipped(PartType.Solar);
         if (solar != null) rover.chargeRate = solar.Stat(0);
         PartData drill = database.Equipped(PartType.Science);
-        if (drill != null)
+        rover.hasDrill = !PartNameAttribute.IsNothing(drill);          // "No Drill" (or none): Collect Sample / Analyze Rock can't work
+        if (rover.hasDrill)
         {
             rover.drillSpeed = drill.Stat(0);
             rover.sampleCapacity = Mathf.RoundToInt(drill.Stat(1));
         }
+        else rover.sampleCapacity = 0;
 
         FitToModels();
         rover.Refill();                         // new parts: full battery

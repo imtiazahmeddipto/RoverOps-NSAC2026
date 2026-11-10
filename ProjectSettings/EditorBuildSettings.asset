@@ -44,6 +44,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/RoverOps/Scenes/Mission 12.unity
     guid: 08ede7ae65e571f47ba35457dbb1a995
+  - enabled: 1
+    path: Assets/RoverOps/Scenes/Mission 13.unity
+    guid: a534e00a8d8c03042ae0d8c75d21d2ab
+  - enabled: 1
+    path: Assets/RoverOps/Scenes/Mission 14.unity
+    guid: 868e02e68f996cb429da5b0033acb068
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

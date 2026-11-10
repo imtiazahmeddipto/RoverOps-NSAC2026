@@ -87,6 +87,7 @@ public class MissionHandler : MonoBehaviour
     public static MissionHandler Current { get; private set; }   // the Rover asks it why a run failed
 
     private MissionData mission;
+    public MissionData Mission => mission;              // this scene's mission from the Mission Database (null if not found)
     private string scene;
     private bool completed;
     public bool IsCompleted => completed;               // done: RUN waits for the results panel (Replay starts again)

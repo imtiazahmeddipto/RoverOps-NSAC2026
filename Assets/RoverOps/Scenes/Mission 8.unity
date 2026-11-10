@@ -8704,7 +8704,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2089659113640040468, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: options.Array.size
-      value: 3
+      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 2089659113640040468, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: options.Array.data[0].name
@@ -8716,7 +8716,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2089659113640040468, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: options.Array.data[2].name
-      value: battery
+      value: sample angle
       objectReference: {fileID: 0}
     - target: {fileID: 2089659113640040468, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: options.Array.data[3].name

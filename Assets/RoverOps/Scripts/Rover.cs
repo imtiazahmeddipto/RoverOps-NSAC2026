@@ -52,12 +52,17 @@ public class Rover : MonoBehaviour
     public float turnSpeed = 60f;       // degrees per second
     public float drillSpeed = 1f;       // 1 = 3 seconds per sample
     public float drillReach = 1f;       // a sample must be closer than this to the nose (m)
+    public bool hasDrill = true;        // false when "No Drill" is fitted (set by RoverLoadout)
     public float areaSize = 58f;        // leaving the test area also ends the run (m)
 
     [Header("Slopes")]
     public float grip = 1f;             // set by the Wheels part (its Grip stat)
     public float slopePerGrip = 20f;    // degrees the rover can climb per point of grip (grip 1 = 20°, 1.5 = 30°)
     public float slopeProbe = 0.6f;     // the slope is measured from this far behind to this far ahead of the rover (m)
+
+    [Header("Crashing into rocks")]
+    [Tooltip("Rocks lower than this (m) can be driven over. Anything taller under the rover, down to the wheels, is a crash.")]
+    public float rockClearance = 0.1f;
     public float MaxSlope => slopePerGrip * grip;
 
     [Header("Power (set by the Battery and Solar parts)")]
@@ -355,11 +360,39 @@ public class Rover : MonoBehaviour
         Gizmos.DrawCube(center, size);
     }
 
+    // Selected Rover in the Scene view: the crash boxes (red = body, orange = under the body, rocks / lander only)
+    void OnDrawGizmosSelected()
+    {
+        BoxCollider box = body != null ? body : GetComponent<BoxCollider>();
+        if (box == null) return;
+        Gizmos.matrix = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
+        Gizmos.color = new Color(1f, 0.25f, 0.2f, 0.9f);
+        Gizmos.DrawWireCube(box.center, box.size * 0.98f);
+        float bottom = box.center.y - box.size.y / 2f;
+        if (bottom <= rockClearance) return;
+        Gizmos.color = new Color(1f, 0.6f, 0.1f, 0.9f);
+        Gizmos.DrawWireCube(new Vector3(box.center.x, (rockClearance + bottom) / 2f, box.center.z),
+                            new Vector3(box.size.x * 0.98f, bottom - rockClearance, box.size.z * 0.98f));
+    }
+
     bool Touching()
     {
+        // the body: anything but the ground
         Vector3 center = rb.position + rb.rotation * body.center;
         foreach (Collider c in Physics.OverlapBox(center, body.size * 0.49f, rb.rotation, ~0, QueryTriggerInteraction.Ignore))   // trigger boxes (storms) aren't walls
-            if (!c.transform.IsChildOf(transform) && c.name != "Ground") return true;
+            if (!c.transform.IsChildOf(transform) && c.name != "Ground" && !(c is TerrainCollider)) return true;
+
+        // under the body, down to the wheels: only rocks and the lander (the ground itself never counts,
+        // so slopes are fine). Without this, low rocks pass under the body and the wheels just climb over them.
+        float bottom = body.center.y - body.size.y / 2f;
+        if (bottom > rockClearance)
+        {
+            Vector3 lowCenter = new Vector3(body.center.x, (rockClearance + bottom) / 2f, body.center.z);
+            Vector3 lowHalf = new Vector3(body.size.x * 0.49f, (bottom - rockClearance) / 2f, body.size.z * 0.49f);
+            int obstacles = cam.rockLayer.value | cam.landerLayer.value;
+            foreach (Collider c in Physics.OverlapBox(rb.position + rb.rotation * lowCenter, lowHalf, rb.rotation, obstacles, QueryTriggerInteraction.Ignore))
+                if (!c.transform.IsChildOf(transform)) return true;
+        }
         return false;
     }
 
@@ -705,18 +738,39 @@ public class Rover : MonoBehaviour
     }
 
     // Readings that need a part the rover doesn't have: rock size and sample size need the HD Cam
-    static string CheckParts(List<CodeBlock> blocks, out CodeBlock bad)
+    // Before RUN: blocks and readings that need a part the rover doesn't have (the block turns red)
+    //   No Camera: camera readings (rock / sample / lander dist, angle, size, detected) and Take Photo
+    //   No Drill:  Collect Sample and Analyze Rock
+    //   no HD Cam: rock size / sample size
+    string CheckParts(List<CodeBlock> blocks, out CodeBlock bad)
     {
         bad = null;
-        if (RoverCamera.HasHDCamera) return null;
         foreach (CodeBlock b in blocks)
-            if (RoverCamera.IsHDOnly(b.Selected) || RoverCamera.IsHDOnly(b.ValueText))
+        {
+            bad = b;
+            if (!cam.HasCamera)
             {
-                bad = b;
+                if (b.type == Block.TakePhoto) return "Take Photo needs a camera. Fit one in the garage";
+                if (IsCameraReading(b.Selected)) return "'" + b.Selected.Trim() + "' needs a camera. Fit one in the garage";
+                if (IsCameraReading(b.ValueText)) return "'" + b.ValueText + "' needs a camera. Fit one in the garage";
+            }
+            if (!hasDrill && (b.type == Block.CollectSample || b.type == Block.AnalyzeRock))
+                return StarGoal.BlockName(b.type) + " needs a drill. Fit one in the garage";
+            if (!RoverCamera.HasHDCamera && (RoverCamera.IsHDOnly(b.Selected) || RoverCamera.IsHDOnly(b.ValueText)))
+            {
                 string reading = RoverCamera.IsHDOnly(b.Selected) ? b.Selected.Trim() : b.ValueText;
                 return "'" + reading + "' needs the " + RoverCamera.HDCameraName + ". Fit it in the garage";
             }
+        }
+        bad = null;
         return null;
+    }
+
+    // rock / sample / lander readings come from the camera ("samples" is the sample box count, not the camera)
+    static bool IsCameraReading(string name)
+    {
+        string key = Key(name ?? "");
+        return key != "samples" && (key.StartsWith("rock") || key.StartsWith("sample") || key.StartsWith("lander"));
     }
 
     void MarkError(CodeBlock block)          // tint a faulty block red
@@ -912,6 +966,7 @@ public class Rover : MonoBehaviour
 
     IEnumerator CollectSample()
     {
+        if (!hasDrill) { yield return Problem("no drill fitted. Fit a drill in the garage."); yield break; }
         yield return BrakeToStop();                      // drill only when standing still
         Collider sample = SampleInReach();
         if (sample == null) { yield return Problem("no sample within " + drillReach + " m of the drill. Get closer to a sample first."); yield break; }
@@ -960,6 +1015,7 @@ public class Rover : MonoBehaviour
     // Same mechanics as Collect Sample: stop, find a rock in reach, wait for power, arm out, work, arm back
     IEnumerator AnalyzeRock()
     {
+        if (!hasDrill) { yield return Problem("no drill fitted. Fit a drill in the garage."); yield break; }
         yield return BrakeToStop();                      // the drill works only when standing still
         Collider rock = RockInReach();
         if (rock == null) { yield return Problem("no rock within " + drillReach + " m of the drill. Get closer to a rock first."); yield break; }

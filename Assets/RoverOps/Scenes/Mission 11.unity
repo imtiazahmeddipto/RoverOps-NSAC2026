@@ -21532,7 +21532,7 @@ PrefabInstance:
       objectReference: {fileID: 886246722}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.size
-      value: 22
+      value: 18
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: equipmentNeeded.Array.size
@@ -21639,28 +21639,40 @@ PrefabInstance:
       value: 7
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
+      propertyPath: solution.Array.data[15].sign
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[15].type
-      value: 4
+      value: 6
+      objectReference: {fileID: 0}
+    - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
+      propertyPath: solution.Array.data[16].sign
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[16].type
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
-      propertyPath: solution.Array.data[17].type
       value: 9
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
+      propertyPath: solution.Array.data[17].sign
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
+      propertyPath: solution.Array.data[17].type
+      value: 13
+      objectReference: {fileID: 0}
+    - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[18].sign
-      value: <
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[18].type
-      value: 7
+      value: 13
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[19].type
-      value: 6
+      value: 13
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[1].value
@@ -21668,7 +21680,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[20].type
-      value: 9
+      value: 13
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[21].type
@@ -21752,11 +21764,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[15].value
-      value: 25
+      value: 50
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[16].value
-      value: 2
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[17].value
@@ -21764,11 +21776,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[18].value
-      value: 40
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[19].value
-      value: 50
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[1].option
@@ -21819,8 +21831,20 @@ PrefabInstance:
       value: battery
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
+      propertyPath: solution.Array.data[15].option
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
+      propertyPath: solution.Array.data[16].option
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
+      propertyPath: solution.Array.data[17].option
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[18].option
-      value: battery
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 2055084936917424712, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: m_AnchorMax.y

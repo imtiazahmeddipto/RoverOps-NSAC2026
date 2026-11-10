@@ -310,7 +310,7 @@ public class RoverCamera : MonoBehaviour
     {
         Clear();
 
-        if (onboardCamera == null || nose == null)
+        if (!hasCamera || onboardCamera == null || nose == null)    // "No Camera" fitted: it can't see or measure anything
             return;
 
         Plane[] picture =

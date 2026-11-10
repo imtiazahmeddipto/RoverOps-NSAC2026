@@ -16447,7 +16447,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[7].value
-      value: 180
+      value: 190
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[8].value
@@ -17273,7 +17273,6 @@ MonoBehaviour:
   starEarned: {fileID: 121651121, guid: 80dfa35e1b25fe84484c425975be8def, type: 3}
   missionsScene: Missions
   transition: {fileID: 1781672894}
-  resultsDelay: 2
 --- !u!1 &7338856750082249500
 GameObject:
   m_ObjectHideFlags: 0
