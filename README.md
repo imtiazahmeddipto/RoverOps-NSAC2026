@@ -74,6 +74,3 @@ Players can relive real moments from Mars rover history in Sector 3 and Sector 4
 
 ## Disclaimer
 RoverOps is a student project made for the NASA Space Apps Challenge 2026. It uses publicly available NASA and partner data, but it is not made, endorsed or supported by NASA.
-
-## License
-[Choose a license, for example MIT]
