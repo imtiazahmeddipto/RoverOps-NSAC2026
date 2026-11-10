@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -41,10 +42,20 @@ public class MissionHandler : MonoBehaviour
     bool NeedsAnalysis => finishBy == FinishBy.AnalyzeRock;
     public bool EndsByAnalysis => NeedsAnalysis;       // the Rover asks: a wrong rock is an error right away
 
-    // The target indicators ask: does the mission still need target rocks analyzed / target photos?
+    // The indicator asks what to point at next.
+    // Send Data: gathered = already sent + waiting in the rover's memory. Targets are pointed at until enough are gathered,
+    // then the Lander (also when the memory is full: it must send before it can gather more).
+    int AnalysesGathered => rover.AnalysesSent + rover.GoodAnalysesWaiting;
+    int PhotosGathered => rover.PhotosSent + rover.GoodPhotosWaiting;
+    bool GatheredAll => AnalysesGathered >= analysesToSend && PhotosGathered >= photosToSend;
+
     public bool WantsAnalysisTarget => rover != null && !completed
-        && ((NeedsAnalysis && RocksDone < rocksToAnalyze) || (NeedsData && rover.AnalysesSent < analysesToSend));
-    public bool WantsPhotoTarget => rover != null && !completed && NeedsData && rover.PhotosSent < photosToSend;
+        && ((NeedsAnalysis && RocksDone < rocksToAnalyze)
+            || (NeedsData && AnalysesGathered < analysesToSend && !rover.MemoryFull));
+    public bool WantsPhotoTarget => rover != null && !completed && NeedsData && PhotosGathered < photosToSend && !rover.MemoryFull;
+    public bool WantsLander => rover != null && !completed && NeedsData && !DataDelivered() && rover.HasDataWaiting
+        && (GatheredAll || rover.MemoryFull);
+    public bool DataStillNeeded => rover != null && NeedsData && !DataDelivered();     // Both: the finish line waits for this
     public bool WantsSampleTarget => rover != null && !completed && UsesSampleTargets && rover.TargetSamplesCollected < SampleTarget.Count;
     bool HasGoal => NeedsFinish || NeedsData || NeedsSamples || NeedsAnalysis;
 
@@ -78,6 +89,7 @@ public class MissionHandler : MonoBehaviour
     private MissionData mission;
     private string scene;
     private bool completed;
+    public bool IsCompleted => completed;               // done: RUN waits for the results panel (Replay starts again)
 
     void OnEnable() => Current = this;
     void OnDisable() { if (Current == this) Current = null; }
@@ -256,16 +268,12 @@ public class MissionHandler : MonoBehaviour
             return;
 
         completed = true;
-        GameAudio.Play(GameAudio.Sfx.MissionComplete);
-        GameAudio.DuckMusic(3.5f);                       // the music steps back so the success sound stands out
 
         rover.EndMission("<color=#7CFC7C>MISSION COMPLETE!</color>");
 
         if (mission == null)
         {
-            if (resultsPanel != null)
-                resultsPanel.SetActive(true);
-
+            ShowResults();
             return;
         }
 
@@ -306,8 +314,30 @@ public class MissionHandler : MonoBehaviour
         UpdateStarGoals(rewards);
         ShowTotalSP(newSP);
 
-        if (resultsPanel != null)
-            resultsPanel.SetActive(true);
+        ShowResults();
+    }
+
+    // ---------------- RESULTS PANEL ----------------
+    [Header("Results Delay")]
+    float resultsDelay = 1.5f;           // seconds after the mission ends before the panel appears
+    Coroutine resultsRoutine;
+
+    // The player sees the last action finish (and hears the success sound) before the panel comes up
+    void ShowResults()
+    {
+        if (resultsPanel == null) return;
+        if (resultsRoutine != null) StopCoroutine(resultsRoutine);
+        resultsRoutine = StartCoroutine(ShowResultsLater());
+    }
+
+    IEnumerator ShowResultsLater()
+    {
+        yield return new WaitForSecondsRealtime(resultsDelay);   // real seconds: the same at any run speed
+        resultsRoutine = null;
+        if (!completed) yield break;                              // not if the player pressed Replay meanwhile
+        resultsPanel.SetActive(true);
+        GameAudio.Play(GameAudio.Sfx.MissionComplete);            // the success sound comes with the panel
+        GameAudio.DuckMusic(3.5f);                                // the music steps back so it stands out
     }
 
     // --------------------------------------------------
@@ -481,6 +511,7 @@ public class MissionHandler : MonoBehaviour
     // Replay the current mission.
     public void Replay()
     {
+        if (resultsRoutine != null) { StopCoroutine(resultsRoutine); resultsRoutine = null; }
         if (resultsPanel != null)
             resultsPanel.SetActive(false);
 

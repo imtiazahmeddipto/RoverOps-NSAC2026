@@ -131,7 +131,11 @@ public class Rover : MonoBehaviour
             if (go != null && (go.transform.IsChildOf(t.transform) || t.transform.IsChildOf(go.transform))) return true;
         return false;
     }
-    public void EndMission(string text) => StopProgram(text);   // the MissionHandler stops the run at the finish line
+    public void EndMission(string text)                  // the MissionHandler stops the run when the mission is complete
+    {
+        StopProgram(text);
+        if (drillArm) StartCoroutine(drillArm.Fold());   // a sample / analysis can finish the mission mid-action: fold the arm back neatly
+    }
     readonly List<GameObject> collected = new List<GameObject>();
 
     // science data: Analyze Rock / Take Photo store it, Send Data moves it to the lander
@@ -156,6 +160,12 @@ public class Rover : MonoBehaviour
     public int RocksAnalyzed => rocksAnalyzed;               // every rock analyzed this run
     public int TargetRocksAnalyzed => targetRocksAnalyzed;   // only rocks with an AnalysisTarget
     int DataWaiting => waitingAnalyses.Count + waitingPhotos.Count;
+
+    // For the indicator: data gathered but not sent yet (only data the lander will accept counts)
+    public bool HasDataWaiting => DataWaiting > 0;
+    public int GoodAnalysesWaiting => waitingAnalyses.FindAll(t => t != null || AnalysisTarget.Count == 0).Count;
+    public int GoodPhotosWaiting => waitingPhotos.FindAll(t => t != null || PhotoTarget.Count == 0).Count;
+    public bool MemoryFull => waitingAnalyses.Count >= analysisCapacity || waitingPhotos.Count >= photoCapacity;
     Coroutine previewRoutine;                    // the photo preview's show-then-fade (UI only, not part of the program)
 
     // motion order (FixedUpdate carries it out)
@@ -179,6 +189,19 @@ public class Rover : MonoBehaviour
     public float SpeedPercent => topSpeed > 0f ? Mathf.Clamp01(speed / topSpeed) : 0f;
     public bool IsDrilling { get; private set; }                        // the drill bit is spinning (collect / analyze)
     public bool IsCharging => recharging;                              // battery ran empty: the solar panel is refilling it
+
+    // ---------------- SOLAR STORMS (active SolarStorm objects) ----------------
+    readonly List<SolarStorm> storms = new List<SolarStorm>();
+    public bool InStorm => storms.Count > 0;
+    float StormSpeed { get { float m = 1f; foreach (SolarStorm s in storms) if (s) m = Mathf.Min(m, s.speedMultiplier); return m; } }
+    float StormPower { get { float m = 1f; foreach (SolarStorm s in storms) if (s) m = Mathf.Max(m, s.powerMultiplier); return m; } }
+
+    public void EnterStorm(SolarStorm storm)
+    {
+        if (!storms.Contains(storm)) storms.Add(storm);
+    }
+
+    public void ExitStorm(SolarStorm storm) => storms.Remove(storm);
     static void Sound(GameAudio.Sfx sfx) => GameAudio.Play(sfx);
     bool InMotion => Moving || Turning;
     float MassFactor => mass / 300f;
@@ -286,7 +309,10 @@ public class Rover : MonoBehaviour
             if (left <= 0.005f) { stopAt = -1f; speed = 0f; }              // arrived on the mark
             else go = left > speed * speed / (2f * brake);                  // brake in time to stop on the mark
         }
-        speed = go ? Mathf.Min(topSpeed, speed + accel * dt) : Mathf.Max(0f, speed - brake * dt);
+        float cap = topSpeed * StormSpeed;                                    // a storm lowers the top speed
+        speed = !go ? Mathf.Max(0f, speed - brake * dt)
+              : speed > cap ? Mathf.MoveTowards(speed, cap, brake * dt)     // entering a storm: ease down to its speed
+              : Mathf.Min(cap, speed + accel * dt);
         if (Moving) speed = Mathf.Max(speed, 0.05f);                       // creep the last few centimetres
         if (speed <= 0f) return;
 
@@ -332,7 +358,7 @@ public class Rover : MonoBehaviour
     bool Touching()
     {
         Vector3 center = rb.position + rb.rotation * body.center;
-        foreach (Collider c in Physics.OverlapBox(center, body.size * 0.49f, rb.rotation))
+        foreach (Collider c in Physics.OverlapBox(center, body.size * 0.49f, rb.rotation, ~0, QueryTriggerInteraction.Ignore))   // trigger boxes (storms) aren't walls
             if (!c.transform.IsChildOf(transform) && c.name != "Ground") return true;
         return false;
     }
@@ -340,7 +366,7 @@ public class Rover : MonoBehaviour
     // Driving, turning and drilling use energy (heavier rovers use more); the camera doesn't care about mass
     void UseEnergy(float amount, bool heavierUsesMore = true)
     {
-        energy -= heavierUsesMore ? amount * MassFactor : amount;
+        energy -= (heavierUsesMore ? amount * MassFactor : amount) * StormPower;   // a storm makes everything use more power
         if (energy > 0f) return;
         energy = 0f;
         speed = 0f;
@@ -426,6 +452,7 @@ public class Rover : MonoBehaviour
     public void Run()
     {
         if (ProgramBuilder.IsBuilding) return;          // wait for the AI to finish placing blocks
+        if (MissionHandler.Current != null && MissionHandler.Current.IsCompleted) return;   // mission done: wait for the results (use Replay)
         if (IsRunning)
         {
             StopProgram("Program stopped. Press RUN to try again.");

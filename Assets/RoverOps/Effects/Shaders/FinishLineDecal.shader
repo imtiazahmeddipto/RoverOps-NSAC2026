@@ -1,7 +1,8 @@
 // RoverOps - Finish Line Decal (simple hollow circle)
 // Put this material on a Cube (remove its collider).
 // Cube X/Z scale = circle size, Y scale = how far up/down it paints.
-// Needs "Depth Texture" ON in the URP asset.
+// Needs "Depth Texture" ON in the URP asset used by the platform (WebGL uses the Mobile asset).
+// Works on WebGL / OpenGL ES (non-reversed depth) and with any Render Scale.
 Shader "RoverOps/Finish Line Decal"
 {
     Properties
@@ -26,6 +27,7 @@ Shader "RoverOps/Finish Line Decal"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            #pragma target 3.0                                  // fwidth / screen derivatives (WebGL 2 is fine)
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
@@ -36,20 +38,20 @@ Shader "RoverOps/Finish Line Decal"
             CBUFFER_END
 
             struct Attributes { float4 positionOS : POSITION; };
-            struct Varyings   { float4 positionCS : SV_POSITION; float4 screenPos : TEXCOORD0; };
+            struct Varyings   { float4 positionCS : SV_POSITION; };
 
             Varyings vert(Attributes IN)
             {
                 Varyings o;
                 o.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
-                o.screenPos = ComputeScreenPos(o.positionCS);
                 return o;
             }
 
             half4 frag(Varyings IN) : SV_Target
             {
-                // Find the surface point behind this pixel
-                float2 uv = IN.screenPos.xy / IN.screenPos.w;
+                // Find the surface point behind this pixel.
+                // GetNormalizedScreenSpaceUV: correct with Render Scale (Mobile = 0.8) and render textures on every platform
+                float2 uv = GetNormalizedScreenSpaceUV(IN.positionCS);
                 #if UNITY_REVERSED_Z
                     float depth = SampleSceneDepth(uv);
                 #else

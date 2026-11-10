@@ -87,8 +87,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1.49, y: 0.6627053, z: 1.9450178}
-  m_Center: {x: 0, y: 0.8183879, z: -0.08931553}
+  m_Size: {x: 1.49, y: 0.64789003, z: 1.9450178}
+  m_Center: {x: 0, y: 0.82579553, z: -0.08931553}
 --- !u!114 &1117419437596273118
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -202,6 +202,7 @@ MonoBehaviour:
   database: {fileID: 11400000, guid: 0e4d306a5d03c6c4bb8c74504aea2c3d, type: 2}
   model: {fileID: 3086027886355386987}
   drillMount: {fileID: 3317435845365113076}
+  cameraHolder: {fileID: 3924061689479000126}
   rover: {fileID: 1117419437596273118}
 --- !u!114 &8332958827184404542
 MonoBehaviour:

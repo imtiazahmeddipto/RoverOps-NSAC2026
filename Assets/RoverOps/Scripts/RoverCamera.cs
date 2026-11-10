@@ -404,7 +404,7 @@ public class RoverCamera : MonoBehaviour
     bool FirstHit(Vector3 from, Vector3 direction, float length, out RaycastHit first)
     {
         first = default;
-        int count = Physics.RaycastNonAlloc(from, direction, rayHits, length);
+        int count = Physics.RaycastNonAlloc(from, direction, rayHits, length, ~0, QueryTriggerInteraction.Ignore);   // trigger boxes (storms) don't block the view
         float best = Mathf.Infinity;
         for (int i = 0; i < count; i++)
         {

@@ -10671,7 +10671,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[0].value
-      value: 10
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 2008552806519596512, guid: 00d9e759d50d08e49b8ae3804befdea9, type: 3}
       propertyPath: solution.Array.data[1].value

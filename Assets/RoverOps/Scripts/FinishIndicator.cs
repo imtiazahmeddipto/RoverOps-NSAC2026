@@ -4,8 +4,10 @@ using UnityEngine.UI;
 // An arrow on the edge of the Mission Viewer that points to what the mission needs NEXT, from its Finish By:
 //   FinishLine     - the finish line
 //   AnalyzeRock    - the nearest target rock not analyzed yet
-//   SendData       - the nearest target rock not analyzed yet, then the nearest photo target not photographed yet
-//   Both           - the data targets first (as SendData), then the finish line
+//   SendData       - target rocks / photo targets one by one (nearest first) until enough data is gathered,
+//                    then the Lander to send it. No targets in the scene ("any rock counts"): only the Lander,
+//                    once the needed data is gathered. A full memory also points to the Lander (send first).
+//   Both           - as SendData, then the finish line once the data is delivered
 //   CollectSamples - the nearest target sample not collected yet (when the scene has SampleTarget samples)
 // Hidden when the target is inside the camera frame, or nothing is left to point at.
 // Optional Target Marker (e.g. a ▼ image): for target rocks / photo targets IN the frame, it sits above the target.
@@ -94,8 +96,10 @@ public class FinishIndicator : MonoBehaviour
         if (mission.WantsAnalysisTarget && NearestRock(from, out position)) { targetIsData = true; return true; }
         if (mission.WantsPhotoTarget && NearestPhoto(from, out position)) { targetIsData = true; return true; }
         if (mission.WantsSampleTarget && NearestSample(from, out position)) { targetIsData = true; return true; }
+        if (mission.WantsLander && NearestLander(from, out position)) { targetIsData = true; return true; }   // everything gathered: send it
 
-        bool dataLeft = mission.WantsAnalysisTarget || mission.WantsPhotoTarget || mission.WantsSampleTarget;
+        bool dataLeft = mission.WantsAnalysisTarget || mission.WantsPhotoTarget || mission.WantsSampleTarget
+                        || mission.DataStillNeeded;
         if (mission.NeedsFinish && mission.finishLine != null && !dataLeft)
         {
             position = mission.finishLine.position;
@@ -121,6 +125,16 @@ public class FinishIndicator : MonoBehaviour
         foreach (SampleTarget t in SampleTarget.All)
             if (t != null && t.gameObject.activeInHierarchy && !mission.rover.IsCollected(t)) Closer(t.transform, from, ref best, ref position, ref targetTop);
         return best < float.MaxValue;
+    }
+
+    bool NearestLander(Vector3 from, out Vector3 position)
+    {
+        position = Vector3.zero;
+        Lander lander = Lander.Nearest(from, out _);
+        if (lander == null) return false;
+        float best = float.MaxValue;
+        Closer(lander.transform, from, ref best, ref position, ref targetTop);
+        return true;
     }
 
     bool NearestPhoto(Vector3 from, out Vector3 position)

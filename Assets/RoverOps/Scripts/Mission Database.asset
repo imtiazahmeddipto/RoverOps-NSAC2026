@@ -162,7 +162,7 @@ MonoBehaviour:
     missions:
     - scene: Mission 9
       title: First Contact
-      description: (Sojourner 1997) Find and analyse Barnacle Bill (Rock Size = 0.4m).
+      description: (Sojourner 1997) Find and analyse Barnacle Bill rock (Size = 3m).
       maxRoverMass: 500
       starGoals:
       - type: 0
@@ -171,15 +171,15 @@ MonoBehaviour:
         text: Analyse Barnacle Bill
       - type: 7
         value: 0
-        block: 12
-        text: Use Repeat Forever code block
-      - type: 2
-        value: 55
-        block: 1
-        text: Finish under 55 seconds
+        block: 7
+        text: Use If code block
+      - type: 7
+        value: 0
+        block: 8
+        text: Use Else code block
     - scene: Mission 10
       title: Send a Message to Earth
-      description: (Sojourner 1997) Photograph Yogi rock (Size = 1.2m) and return
+      description: (Sojourner 1997) Photograph Yogi rock (Size = 3.5m) and return
         to the Pathfinder lander.
       maxRoverMass: 500
       starGoals:
@@ -196,9 +196,9 @@ MonoBehaviour:
         block: 12
         text: Use Repeat Forever code block
     - scene: Mission 11
-      title: The Dust Devil
-      description: "(Spirit 2004\u20132010) During the dust-clearing event, avoid
-        obstacles, recharge, and continue.\r\n"
+      title: 'The Dust Storm '
+      description: "(Spirit 2004\u20132010) During a dust storm, avoid obstacles,
+        wait for solar panels to recharge, and continue."
       maxRoverMass: 500
       starGoals:
       - type: 0
@@ -207,16 +207,16 @@ MonoBehaviour:
         text: Reach the Lander
       - type: 7
         value: 5
-        block: 6
-        text: Use Wait code blocks
+        block: 12
+        text: Use Repeat Forever code blocks
       - type: 3
-        value: 50
+        value: 40
         block: 1
-        text: Reach with minimum 50% battery
+        text: Reach with minimum 40% battery
     - scene: Mission 12
       title: The Broken Wheel
-      description: "(Spirit 2004\u20132010) Spirit's damaged wheel dragged across
-        the ground."
+      description: "(Spirit 2004\u20132010) Drive backwards and reach the finish
+        line."
       maxRoverMass: 500
       starGoals:
       - type: 0
@@ -225,8 +225,8 @@ MonoBehaviour:
         text: Reach the Lander
       - type: 7
         value: 0
-        block: 11
-        text: Use While code block
+        block: 12
+        text: Use Repeat Forever code block
       - type: 3
         value: 40
         block: 1

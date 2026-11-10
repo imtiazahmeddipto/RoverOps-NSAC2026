@@ -1,11 +1,17 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 // The AI button: builds this mission's solution in the Code Editor, block by block.
 // Put ONE on each mission scene (e.g. on the Code Editor) and fill "Solution" in the Inspector.
 // "When mission starts" is added by itself, don't list it. The AI button's OnClick -> ProgramBuilder.BuildSolution.
+// AI COST: BuildSolution opens the Confirmation Panel (found by name under the AI button, or assign it).
+//   Its "Cancel" and "Generate" buttons are wired by this script (their old OnClick is switched off).
+//   Generate spends "Cost" Space Points, then builds. Clicking anywhere outside the panel (or Esc) closes it.
+//   Each scene's ProgramBuilder has its own Cost.
 //
 // Each step copies the matching block from the Blocks panel (like dragging it in) and sets:
 //   option - the If / Repeat While chip, e.g. "sample detected", "rock dist"   (empty = the block's default)
@@ -43,29 +49,162 @@ public class ProgramBuilder : MonoBehaviour
     [Header("Look")]
     [Min(0f)] public float stepDelay = 0.15f;   // seconds between blocks (0 = all at once)
 
+    [Header("AI Cost (this mission)")]
+    [Min(0)] public int cost = 200;             // Space Points each time the AI writes the program (0 = free)
+    public GameObject confirmationPanel;        // optional: found by name ("Confirmation Panel") if empty
+    [TextArea(2, 4)]
+    public string confirmationMessage = "Let AI create rover instructions for your current mission.\nThis will cost: <color=#F8D878>{cost} SP</color>";
+
     // True while the AI is placing blocks: RUN, CLEAR and dragging wait for it
     public static bool IsBuilding { get; private set; }
 
     static readonly string[] Signs = { "<", ">", "=" };
 
     // ---------------- AI BUTTON ----------------
+    // The AI button's OnClick: opens the confirmation (clicking AI again closes it).
+    // No Confirmation Panel in the scene: builds at once, without a cost.
     public void BuildSolution()
     {
-        if (Rover.IsRunning || IsBuilding) return;
+        SetupPanel();
+        if (panel == null) { Generate(false); return; }
+        if (panel.activeSelf || Time.unscaledTime - closedAt < 0.25f) { ClosePanel(); return; }
+        if (!CanBuild()) return;
+        OpenPanel();
+    }
 
+    // The panel's "Generate" button
+    public void ConfirmGenerate()
+    {
+        ClosePanel();
+        Generate(true);
+    }
+
+    // The panel's "Cancel" button (clicking outside or Esc does the same)
+    public void ClosePanel()
+    {
+        if (panel == null || !panel.activeSelf) return;
+        panel.SetActive(false);
+        closedAt = Time.unscaledTime;
+    }
+
+    // Everything that must be true before the AI may build (tells the player why not)
+    bool CanBuild()
+    {
+        if (Rover.IsRunning || IsBuilding) return false;
+        if (MissionHandler.Current != null && MissionHandler.Current.IsCompleted) return false;   // mission done: wait for the results
         if (blocksPanel == null || programArea == null)
         {
             Debug.LogError("[AI] Assign Blocks Panel and Program Area on the ProgramBuilder.", this);
-            return;
+            return false;
         }
-
         if (solution == null || solution.Count == 0)
         {
             Tell("<color=#FFC63A>No AI solution for this mission yet</color>");
-            return;
+            return false;
+        }
+        return true;
+    }
+
+    string costNote;                            // "-200 SP" after a paid build, shown with the result
+
+    void Generate(bool pay)
+    {
+        if (!CanBuild()) return;
+        costNote = null;
+
+        if (pay && cost > 0)
+        {
+            PartDatabase db = Database();
+            if (db == null)
+                Debug.LogWarning("[AI] No Part Database found: the AI is free in this scene.", this);
+            else if (!db.TrySpend(cost))
+            {
+                Tell("<color=#FF6B6B>Not enough Space Points for the AI (" + cost.ToString("N0") + " SP needed).</color>");
+                GameAudio.Play(GameAudio.Sfx.Error);
+                return;
+            }
+            else costNote = "-" + cost.ToString("N0") + " SP  (" + db.SpacePoints.ToString("N0") + " SP left)";
         }
 
         StartCoroutine(Build());
+    }
+
+    // ---------------- CONFIRMATION PANEL ----------------
+    GameObject panel;
+    TMP_Text panelText;
+    Button generateButton;
+    bool panelReady;
+    float closedAt = -1f;
+
+    void Start() => SetupPanel();               // hidden from the start
+
+    // Finds the panel and wires its buttons once
+    void SetupPanel()
+    {
+        if (panelReady) return;
+        panelReady = true;
+        panel = confirmationPanel != null ? confirmationPanel : FindInScene("Confirmation Panel");
+        if (panel == null) return;
+
+        foreach (Button b in panel.GetComponentsInChildren<Button>(true))
+        {
+            for (int i = 0; i < b.onClick.GetPersistentEventCount(); i++)      // their old OnClick (BuildSolution) is switched off
+                b.onClick.SetPersistentListenerState(i, UnityEventCallState.Off);
+            if (b.name == "Cancel") b.onClick.AddListener(ClosePanel);
+            else if (b.name == "Generate") { generateButton = b; b.onClick.AddListener(ConfirmGenerate); }
+        }
+        foreach (TMP_Text t in panel.GetComponentsInChildren<TMP_Text>(true))
+            if (t.name == "Description") panelText = t;
+
+        if (generateButton == null) Debug.LogWarning("[AI] The Confirmation Panel has no button named \"Generate\".", this);
+        panel.SetActive(false);
+    }
+
+    // Shows only the message; "not enough SP" is told in the Rover Status after Generate is pressed
+    void OpenPanel()
+    {
+        if (panelText != null)
+            panelText.text = cost > 0
+                ? confirmationMessage.Replace("{cost}", cost.ToString("N0"))
+                : confirmationMessage.Split('\n')[0] + "\nFree for this mission.";
+        if (generateButton != null) generateButton.interactable = true;
+        panel.SetActive(true);
+    }
+
+    // Click anywhere outside the panel (or Esc): close it, like a pop-up on a website
+    void Update()
+    {
+        if (panel == null || !panel.activeSelf) return;
+#if ENABLE_INPUT_SYSTEM
+        UnityEngine.InputSystem.Pointer pointer = UnityEngine.InputSystem.Pointer.current;
+        UnityEngine.InputSystem.Keyboard keys = UnityEngine.InputSystem.Keyboard.current;
+        bool esc = keys != null && keys.escapeKey.wasPressedThisFrame;
+        bool pressed = pointer != null && pointer.press.wasPressedThisFrame;
+        Vector2 pos = pointer != null ? pointer.position.ReadValue() : Vector2.zero;
+#else
+        bool esc = Input.GetKeyDown(KeyCode.Escape);
+        bool pressed = Input.GetMouseButtonDown(0);
+        Vector2 pos = Input.mousePosition;
+#endif
+        if (esc) { ClosePanel(); return; }
+        if (pressed && !OverPanel(pos)) ClosePanel();
+    }
+
+    // Inside the panel or any of its children (buttons that stick out count too)
+    bool OverPanel(Vector2 screenPos)
+    {
+        Canvas canvas = panel.GetComponentInParent<Canvas>();
+        Camera cam = canvas != null && canvas.rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.rootCanvas.worldCamera : null;
+        foreach (RectTransform r in panel.GetComponentsInChildren<RectTransform>())
+            if (RectTransformUtility.RectangleContainsScreenPoint(r, screenPos, cam)) return true;
+        return false;
+    }
+
+    GameObject FindInScene(string objectName)
+    {
+        foreach (Transform t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (t.name == objectName && t.gameObject.scene == gameObject.scene) return t.gameObject;
+        return null;
     }
 
     IEnumerator Build()
@@ -110,6 +249,7 @@ public class ProgramBuilder : MonoBehaviour
             string missing = MissingEquipment();
             if (missing != null)
                 done += "\n<color=#FFC63A>" + missing + " needed to complete this mission.</color>";
+            if (costNote != null) done += "\n<color=#F8D878>" + costNote + "</color>";
             Tell(done);
         }
         finally
@@ -224,18 +364,25 @@ public class ProgramBuilder : MonoBehaviour
         return false;
     }
 
-    // ---------------- EQUIPMENT NEEDED ----------------
-    // "HD Cam, Drill 2" for the needed parts that are NOT on the rover; null if nothing is missing
-    string MissingEquipment()
+    // The Part Database (Space Points and fitted parts): assigned, or found through the rover's RoverLoadout
+    PartDatabase Database()
     {
-        if (equipmentNeeded == null || equipmentNeeded.Count == 0) return null;
-
         if (partDatabase == null)
         {
             RoverLoadout loadout = rover != null ? rover.GetComponentInParent<RoverLoadout>() : null;
             if (loadout == null) loadout = FindAnyObjectByType<RoverLoadout>();
             if (loadout != null) partDatabase = loadout.database;
         }
+        return partDatabase;
+    }
+
+    // ---------------- EQUIPMENT NEEDED ----------------
+    // "HD Cam, Drill 2" for the needed parts that are NOT on the rover; null if nothing is missing
+    string MissingEquipment()
+    {
+        if (equipmentNeeded == null || equipmentNeeded.Count == 0) return null;
+
+        Database();
 
         var fitted = new HashSet<string>();
         if (partDatabase != null)

@@ -59,6 +59,20 @@ public class PartDatabase : ScriptableObject
         PlayerPrefs.Save();
     }
 
+    // Set the balance to an exact number (the Space Points editor window uses this)
+    public void SetSpacePoints(int amount)
+    {
+        PlayerPrefs.SetInt(SpacePointsKey, Mathf.Max(0, amount));
+        PlayerPrefs.Save();
+    }
+
+    // Forget the balance: it starts again at Starting Space Points
+    public void ResetSpacePoints()
+    {
+        PlayerPrefs.DeleteKey(SpacePointsKey);
+        InitializeSpacePoints();
+    }
+
     public void InitializeSpacePoints()
     {
         if (!PlayerPrefs.HasKey(SpacePointsKey))
@@ -73,6 +87,18 @@ public class PartDatabase : ScriptableObject
         if (part == null) return false;
         if (part.spacePointCost <= 0) return true;
         return PlayerPrefs.GetInt(OwnedKey(part), 0) == 1;
+    }
+
+    // Spend Space Points on something that isn't a part (e.g. the AI code generator). False = not enough.
+    public bool TrySpend(int amount)
+    {
+        if (amount <= 0) return true;
+        InitializeSpacePoints();
+        int balance = PlayerPrefs.GetInt(SpacePointsKey, 0);
+        if (balance < amount) return false;
+        PlayerPrefs.SetInt(SpacePointsKey, balance - amount);
+        PlayerPrefs.Save();
+        return true;
     }
 
     public bool TryBuy(PartData part)

@@ -12,6 +12,7 @@ public class RoverLoadout : MonoBehaviour
     public PartDatabase database;
     public Transform model;             // holds the Body model; the parts go here too
     public Transform drillMount;        // optional: Science (drill) parts are placed under this (Drill 2), so they move with the arm
+    public Transform cameraHolder;      // optional (found by name "Camera Holder"): the Camera part turns to its Y rotation
     public Rover rover;                 // optional: the playable rover gets the part stats
 
     readonly Dictionary<PartType, GameObject> mounted = new Dictionary<PartType, GameObject>();
@@ -49,7 +50,22 @@ public class RoverLoadout : MonoBehaviour
         go.name = part.type + ": " + part.name;
         SetLayer(go.transform, model.gameObject.layer);
         if (part.type == PartType.Science && drillMount != null) go.transform.SetParent(drillMount, true);   // keeps its place, then follows the arm
+        if (part.type == PartType.Camera) FaceCameraHolder(go.transform);
         mounted[part.type] = go;
+    }
+
+    // The camera model turns to the Camera Holder's Y rotation (e.g. 180 = facing back),
+    // around the holder's position, so it stays in its place on the mast
+    void FaceCameraHolder(Transform cameraModel)
+    {
+        if (cameraHolder == null)
+            foreach (Transform t in GetComponentsInChildren<Transform>(true))
+                if (t.name == "Camera Holder") { cameraHolder = t; break; }
+        if (cameraHolder == null) return;
+
+        float y = Mathf.DeltaAngle(0f, cameraHolder.localEulerAngles.y);   // -180..180, relative to the rover's body
+        if (Mathf.Abs(y) < 0.01f) return;
+        cameraModel.RotateAround(cameraHolder.position, cameraHolder.parent != null ? cameraHolder.parent.up : transform.up, y);
     }
 
     // ---------------- STATS ON THE PLAYABLE ROVER ----------------

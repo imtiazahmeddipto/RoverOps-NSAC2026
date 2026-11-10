@@ -184,7 +184,7 @@ MonoBehaviour:
     - name: Drill Speed
       value: 1
     - name: Sample Capacity
-      value: 2
+      value: 1
   - name: Drill 2
     type: 4
     icon: {fileID: -504396564, guid: 702899d114e872a4599928e15a248816, type: 3}
