@@ -1,8 +1,6 @@
 # RoverOps
 **Build. Code. Crash. Repeat.**
 
-![RoverOps screenshot](docs/screenshot.png)
-
 ## The Challenge
 RoverOps was made for the **2026 NASA Space Apps Challenge: Space Mission Design Game**. The challenge asks for a game where players design, manage and simulate a space mission, and learn the trade-offs real mission teams face.
 
@@ -18,7 +16,7 @@ In RoverOps, players run a Mars rover mission. They build a rover from parts, pl
 **14 missions | 19 rover parts | real NASA landing sites | playable in the browser**
 
 ## Play / Run
-- **Play online:** [link to your WebGL build]
+- **Play online:** https://imtiazahmeddipto.itch.io/roverops
 - **Open in Unity:**
   1. Clone this repository.
   2. Open the project with **Unity 6000.0.62f1** (Universal Render Pipeline).
@@ -28,6 +26,7 @@ In RoverOps, players run a Mars rover mission. They build a rover from parts, pl
 
 ### MarsForge (Mars Terrain Generation Tool)
 We built MarsForge to create RoverOps' terrain. It selects an area on the NASA Mars Trek map, generates 3D terrain and exports it as an FBX model.
+![MarsForge screenshot](docs/MarsForge.png)
 
 - **Terrain:** built from the USGS MOLA–HRSC elevation data, with procedural craters and details.
 - **AI Rock Detection:** RockBoxNet finds real rocks in HiRISE images where coverage exists.
